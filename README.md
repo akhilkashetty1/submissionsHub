@@ -63,6 +63,7 @@ The tables are created automatically on first request.
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | The one admin login |
 | `SESSION_SECRET` | Signs session cookies. Changing it signs everyone out. |
 | `INGEST_KEY_2W`, `INGEST_KEY_4W`, `INGEST_KEY_ROADSHIELD` | Each project's secret; a key only writes to its own project |
+| `STORAGE_LIMIT_MB` | Optional: your plan's storage limit in MB for the Overview meter (default 1024) |
 | `INGEST_ORIGINS_2W` | Optional: lets a browser post directly from these site addresses (not needed now that 2W has its own server route) |
 
 ## How ingest works
@@ -82,10 +83,14 @@ plus optional `submittedAt` (ISO time) and `flagged` (header names to highlight)
 - **Per form:** search across every answer, a date range (India time), and pages of 50.
 - **Detail:** every field, remarks under their question, flagged answers in red.
 - **Export to Excel:** the current filter, or a single submission.
+- **Delete (permanent):** tick rows and press **Delete**, or use the Delete button on a submission.
+  Tick the header box to select the whole page; when more entries match, **Select all N** extends
+  the choice across every page of the current search/date filter. Everything asks for confirmation,
+  and deleting all matches makes you type `DELETE`. There is no undo, so export to Excel first if
+  you might need the data. Deletes re-check the login on the server.
+- **Storage meter** (Overview): database size against `STORAGE_LIMIT_MB` (default 1024), so you know when to clear old entries.
 
 Login: 8 failed attempts from one IP lock it out for 15 minutes.
-Deleting a test row: use the Neon console (SQL: `delete from submissions where id = …`).
-The admin itself is read-only on purpose.
 
 ## Adding a project
 
