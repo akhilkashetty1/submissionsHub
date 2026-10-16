@@ -8,6 +8,7 @@ import { can } from "@/lib/permissions";
 import { getProject } from "@/lib/projects";
 import { formatIST, getSubmission, listNotes } from "@/lib/submissions";
 import { cn } from "@/lib/utils";
+import CellMarkBadge from "@/components/CellMarkBadge";
 import DeleteSubmissionButton from "@/components/DeleteSubmissionButton";
 import ExportButton from "@/components/ExportButton";
 import MarkPicker from "@/components/MarkPicker";
@@ -98,6 +99,11 @@ export default async function SubmissionPage({ params }: Props) {
               </span>
               <MarkPicker projectId={project.id} ids={[s.id]} current={s.mark} />
               {mark && <span className="chip">{mark.label}</span>}
+              {Object.keys(s.cell_marks).length > 0 && (
+                <span className="text-xs text-muted">
+                  + {Object.keys(s.cell_marks).length} coloured value{Object.keys(s.cell_marks).length === 1 ? "" : "s"} below · ✕ clears everything
+                </span>
+              )}
             </div>
           )}
 
@@ -143,7 +149,7 @@ export default async function SubmissionPage({ params }: Props) {
               >
                 <dt className="text-muted">
                   {h}
-                  {cm && <span className="ml-2 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold text-white" style={{ backgroundColor: cm.dot }}>{cm.label}</span>}
+                  {cm && <CellMarkBadge projectId={project.id} submissionId={s.id} col={h} mark={cm.id} canWrite={canWrite} />}
                   {remarks.has(h) && <span className="mt-1.5 block w-fit max-w-full rounded-md bg-paper-2 px-2 py-1 text-xs italic text-ink-soft ring-1 ring-line-soft">Remarks: {remarks.get(h) || "—"}</span>}
                 </dt>
                 <dd className={cn("whitespace-pre-wrap break-words font-medium text-ink sm:text-right", flagged.has(h) && "text-flag")}>{v || <span className="font-normal text-faint">—</span>}</dd>

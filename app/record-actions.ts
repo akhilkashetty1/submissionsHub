@@ -3,7 +3,19 @@
 import { authorise } from "@/lib/access";
 import { isMark } from "@/lib/marks";
 import { can } from "@/lib/permissions";
-import { MAX_NOTE, addNote, deleteNoteById, getNote, setCellMark, setMarkByIds, setMarkMatching, type Filters, type Note } from "@/lib/submissions";
+import {
+  MAX_NOTE,
+  addNote,
+  clearHighlightsByIds,
+  clearHighlightsMatching,
+  deleteNoteById,
+  getNote,
+  setCellMark,
+  setMarkByIds,
+  setMarkMatching,
+  type Filters,
+  type Note,
+} from "@/lib/submissions";
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -38,6 +50,27 @@ export async function setMarkForAllMatching(projectId: string, filters: Filters,
     };
   } catch (err) {
     console.error("setMarkForAllMatching failed", err);
+    return { ok: false, error: "Could not save. Try again." };
+  }
+}
+
+/**
+ * Remove every highlight (row colour and coloured values) from the chosen records, or from
+ * everything matching the filters when `matching` is given. Needs Contributor.
+ */
+export async function clearHighlights(projectId: string, ids: string[] | null, matching?: Filters): Promise<Result<{ changed: number }>> {
+  const auth = await authorise(projectId, "write");
+  if (!auth.ok) return auth;
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  try {
+    if (matching) {
+      const f = { q: s(matching.q), from: s(matching.from), to: s(matching.to), mark: s(matching.mark), notes: s(matching.notes) };
+      return { ok: true, changed: await clearHighlightsMatching(auth.project.id, f) };
+    }
+    if (!Array.isArray(ids) || !ids.length) return { ok: false, error: "Nothing selected." };
+    return { ok: true, changed: await clearHighlightsByIds(auth.project.id, ids.map(String)) };
+  } catch (err) {
+    console.error("clearHighlights failed", err);
     return { ok: false, error: "Could not save. Try again." };
   }
 }

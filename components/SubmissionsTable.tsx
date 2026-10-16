@@ -145,6 +145,11 @@ export default function SubmissionsTable({
     const o = overrides[r.id]?.cells;
     return o && c in o ? o[c] : (r.cellMarks[c] ?? null);
   };
+  /** Every coloured value on a row right now (including unconfirmed changes), column → colour. */
+  const cellMarksOf = (r: TableRow) => {
+    const merged: Record<string, string | null> = { ...r.cellMarks, ...overrides[r.id]?.cells };
+    return Object.fromEntries(Object.entries(merged).filter((e): e is [string, string] => e[1] !== null));
+  };
   const titleOf = (r: TableRow) => r.data[titleColumn] || `#${r.id}`;
 
   // Remember the layout (debounced). Going back to exactly the default forgets the customisation instead.
@@ -557,13 +562,19 @@ export default function SubmissionsTable({
           target={quick}
           rowMark={rowMark(quickRow)}
           cellMark={quick.col ? cellMark(quickRow, quick.col) : null}
+          rowCellMarks={cellMarksOf(quickRow)}
           rowCopyText={columns.map((c) => quickRow.data[c] ?? "").join("\t")}
           canWrite={canWrite}
           onClose={() => setQuick(null)}
           onMarked={(markScope, mark) => {
             setOverrides((o) => ({
               ...o,
-              [quick.rowId]: markScope === "row" ? { ...o[quick.rowId], mark } : { ...o[quick.rowId], cells: { ...o[quick.rowId]?.cells, [quick.col as string]: mark } },
+              [quick.rowId]:
+                markScope === "all"
+                  ? { ...o[quick.rowId], mark: null, cells: Object.fromEntries(Object.keys(cellMarksOf(quickRow)).map((c) => [c, null])) }
+                  : markScope === "row"
+                    ? { ...o[quick.rowId], mark }
+                    : { ...o[quick.rowId], cells: { ...o[quick.rowId]?.cells, [quick.col as string]: mark } },
             }));
             router.refresh();
           }}

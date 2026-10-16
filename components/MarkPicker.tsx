@@ -3,14 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Check, Loader2, X } from "lucide-react";
-import { setMark, setMarkForAllMatching } from "@/app/record-actions";
+import { clearHighlights, setMark, setMarkForAllMatching } from "@/app/record-actions";
 import { MARKS } from "@/lib/marks";
 import { cn } from "@/lib/utils";
 
 /**
  * Row of highlight colours, the digital version of colouring a row in Excel.
  * Works on a record (`ids`), on a selection (`ids`), or on everything matching the
- * filters (`matching`). Clicking the colour a record already has clears it.
+ * filters (`matching`). Clicking the colour a record already has clears the row colour;
+ * the ✕ clears everything, including colours on individual values.
  */
 export default function MarkPicker({
   projectId,
@@ -42,6 +43,16 @@ export default function MarkPicker({
     });
   };
 
+  const clearAll = () => {
+    setError(null);
+    start(async () => {
+      const res = await clearHighlights(projectId, matching ? null : (ids ?? []), matching);
+      if (!res.ok) return setError(res.error);
+      onDone?.(`Cleared all highlights on ${res.changed} record${res.changed === 1 ? "" : "s"}.`);
+      router.refresh();
+    });
+  };
+
   return (
     <span className="inline-flex items-center gap-1.5" role="group" aria-label="Highlight colour">
       {MARKS.map((m) => {
@@ -68,9 +79,9 @@ export default function MarkPicker({
       <button
         type="button"
         disabled={pending}
-        onClick={() => apply(null)}
-        title="Clear highlight"
-        aria-label="Clear highlight"
+        onClick={clearAll}
+        title="Clear all highlights (row and values)"
+        aria-label="Clear all highlights"
         className={cn("grid h-6 w-6 place-items-center rounded-full transition disabled:opacity-60", dark ? "text-[#8b919c] hover:text-white" : "text-muted hover:text-ink")}
       >
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}

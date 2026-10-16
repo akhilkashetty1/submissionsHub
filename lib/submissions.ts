@@ -112,11 +112,13 @@ function where(project: string, f: Filters) {
       `(search like $${params.length} or exists (select 1 from submission_notes sn where sn.submission_id = submissions.id and lower(sn.body) like $${params.length}))`,
     );
   }
-  if (f.mark === "any") clauses.push("mark is not null");
-  else if (f.mark === "none") clauses.push("mark is null");
+  // A record counts as highlighted if the row has a colour or any of its values does.
+  const cellMarked = (extra = "") => `exists (select 1 from cell_marks cm where cm.submission_id = submissions.id${extra})`;
+  if (f.mark === "any") clauses.push(`(mark is not null or ${cellMarked()})`);
+  else if (f.mark === "none") clauses.push(`(mark is null and not ${cellMarked()})`);
   else if (isMark(f.mark)) {
     params.push(f.mark);
-    clauses.push(`mark = $${params.length}`);
+    clauses.push(`(mark = $${params.length} or ${cellMarked(` and cm.mark = $${params.length}`)})`);
   }
   if (f.notes === "1") clauses.push("exists (select 1 from submission_notes sn where sn.submission_id = submissions.id)");
   // Dates are calendar days in India time.
@@ -226,7 +228,7 @@ export async function projectStats() {
             count(*)::text as total,
             count(*) filter (where received_at > now() - interval '30 days')::text as last30,
             count(*) filter (where jsonb_array_length(flagged) > 0)::text as flagged,
-            count(*) filter (where mark is not null)::text as marked,
+            count(*) filter (where mark is not null or exists (select 1 from cell_marks cm where cm.submission_id = submissions.id))::text as marked,
             max(received_at) as latest
      from submissions group by project`,
   );
@@ -279,6 +281,32 @@ export async function setMarkMatching(project: string, f: Filters, mark: MarkId 
     w.params,
   );
   return r.n;
+}
+
+/**
+ * Removes every highlight on the chosen records: the row colour and all coloured values.
+ * `scope` is SQL selecting the records' ids. Returns how many records had something to clear.
+ */
+async function clearHighlightsWhere(scope: string, params: unknown[]) {
+  const [r] = await query<{ n: number }>(
+    `with s as (${scope}),
+       c as (delete from cell_marks where submission_id in (select id from s) returning submission_id),
+       u as (update submissions set mark = null, mark_by = null, mark_at = null where id in (select id from s) and mark is not null returning id)
+     select count(*)::int as n from (select id from u union select submission_id from c) t`,
+    params,
+  );
+  return r.n;
+}
+
+export async function clearHighlightsByIds(project: string, ids: string[]) {
+  const clean = [...new Set(ids)].filter((i) => /^\d{1,18}$/.test(i)).slice(0, 1000);
+  if (!clean.length) return 0;
+  return clearHighlightsWhere(`select id from submissions where project = $1 and id = any($2::bigint[])`, [project, clean]);
+}
+
+export async function clearHighlightsMatching(project: string, f: Filters) {
+  const w = where(project, f);
+  return clearHighlightsWhere(`select id from submissions where ${w.sql}`, w.params);
 }
 
 /* -------------------------------------------------------------------- notes */

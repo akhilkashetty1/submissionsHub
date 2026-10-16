@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Check, ClipboardCopy, ExternalLink, Loader2, MessageSquarePlus, Send, X } from "lucide-react";
-import { createNote, setCellMarkAction, setMark } from "@/app/record-actions";
-import { MARKS } from "@/lib/marks";
+import { Check, ClipboardCopy, Eraser, ExternalLink, Loader2, MessageSquarePlus, Send, X } from "lucide-react";
+import { clearHighlights, createNote, setCellMarkAction, setMark } from "@/app/record-actions";
+import { MARKS, markById } from "@/lib/marks";
 import { startNav } from "@/lib/nav-state";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +38,7 @@ export default function QuickActions({
   target,
   rowMark,
   cellMark,
+  rowCellMarks,
   rowCopyText,
   canWrite,
   onClose,
@@ -49,11 +50,14 @@ export default function QuickActions({
   target: QuickTarget;
   rowMark: string | null;
   cellMark: string | null;
+  /** Every coloured value on this row (column → colour), including ones not on screen. */
+  rowCellMarks: Record<string, string>;
   /** The row's visible values, tab-separated (pastes straight into Excel). */
   rowCopyText: string;
   canWrite: boolean;
   onClose: () => void;
-  onMarked: (scope: "cell" | "row", mark: string | null) => void;
+  /** "all" means the row colour and every coloured value were cleared. */
+  onMarked: (scope: "cell" | "row" | "all", mark: string | null) => void;
   onNoted: () => void;
   onToast: (message: string) => void;
 }) {
@@ -68,6 +72,20 @@ export default function QuickActions({
   const [copied, setCopied] = useState<string | null>(null);
 
   const current = scope === "cell" ? cellMark : rowMark;
+  const colouredValues = Object.keys(rowCellMarks).length;
+  const anything = rowMark !== null || colouredValues > 0;
+
+  const clearAll = () => {
+    if (!canWrite || pending) return;
+    setError(null);
+    start(async () => {
+      const res = await clearHighlights(projectId, [target.rowId]);
+      if (!res.ok) return setError(res.error);
+      onMarked("all", null);
+      onToast("All highlights on this row cleared");
+      onClose();
+    });
+  };
 
   const paint = (mark: string | null) => {
     if (!canWrite || pending) return;
@@ -173,7 +191,17 @@ export default function QuickActions({
                   onClick={() => setScope(s)}
                   className={cn("rounded-md px-2 py-1.5 transition", scope === s ? "bg-white text-night shadow-sm" : "text-[#9aa1ad] hover:text-white")}
                 >
-                  {s === "cell" ? "This value" : "Whole row"}
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    {s === "cell" ? "This value" : "Whole row"}
+                    {/* What's on it now, so an existing colour is never hidden behind the other tab */}
+                    {markById(s === "cell" ? cellMark : rowMark) && (
+                      <span
+                        title={`Currently ${markById(s === "cell" ? cellMark : rowMark)!.label}`}
+                        className="h-2 w-2 rounded-full ring-1 ring-black/20"
+                        style={{ backgroundColor: markById(s === "cell" ? cellMark : rowMark)!.dot }}
+                      />
+                    )}
+                  </span>
                 </button>
               ))}
             </div>
@@ -197,10 +225,27 @@ export default function QuickActions({
                 {current === m.id ? <Check className="h-4 w-4" strokeWidth={3} /> : <span className="text-[0.65rem] font-bold opacity-70">{i + 1}</span>}
               </button>
             ))}
-            <button type="button" disabled={pending || current === null} onClick={() => paint(null)} title="Clear (press 0)" aria-label="Clear highlight" className="grid h-8 w-8 place-items-center rounded-full text-[#8b919c] hover:bg-white/[0.07] hover:text-white disabled:opacity-30">
+            <button type="button" disabled={pending || current === null} onClick={() => paint(null)} title={`Clear ${scope === "cell" ? "this value's" : "the row's"} colour (press 0)`} aria-label="Clear highlight" className="grid h-8 w-8 place-items-center rounded-full text-[#8b919c] hover:bg-white/[0.07] hover:text-white disabled:opacity-30">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
             </button>
           </div>
+          {anything && (
+            <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[0.7rem] text-[#9aa1ad] ring-1 ring-white/[0.06]">
+              <span className="min-w-0 truncate">
+                {rowMark ? `Row: ${markById(rowMark)?.label}` : "Row: no colour"}
+                {colouredValues > 0 && ` · ${colouredValues} coloured value${colouredValues === 1 ? "" : "s"}`}
+              </span>
+              <button
+                type="button"
+                onClick={clearAll}
+                disabled={pending}
+                title="Remove the row colour and every coloured value on this row"
+                className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-white transition hover:bg-white/[0.08] disabled:opacity-50"
+              >
+                <Eraser className="h-3 w-3" /> Clear all
+              </button>
+            </div>
+          )}
         </>
       )}
 
