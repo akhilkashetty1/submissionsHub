@@ -6,6 +6,7 @@ import { Check, Copy, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, UserPlus }
 import { createUserAction, deleteUserAction, resetPasswordAction, updateUserAction } from "@/app/user-actions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Modal from "@/components/Modal";
+import PortalIcon from "@/components/PortalIcon";
 import { LEVELS, LEVEL_HELP, LEVEL_LABEL, type Level } from "@/lib/permissions";
 import { PROJECTS } from "@/lib/projects";
 import { cn } from "@/lib/utils";
@@ -105,7 +106,7 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
                 ) : PROJECTS.some((p) => u.access[p.id]) ? (
                   PROJECTS.filter((p) => u.access[p.id]).map((p) => (
                     <span key={p.id} className="chip">
-                      <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: p.accent }} />
+                      <PortalIcon id={p.id} accent={p.accent} size="xs" />
                       {p.short} · <strong className="font-semibold text-ink">{LEVEL_LABEL[u.access[p.id]]}</strong>
                     </span>
                   ))
@@ -260,7 +261,7 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
             {PROJECTS.map((p) => (
               <label key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-[0.8125rem]">
                 <span className="flex items-center gap-2 font-medium">
-                  <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: p.accent }} />
+                  <PortalIcon id={p.id} accent={p.accent} size="xs" />
                   {p.name}
                 </span>
                 <select

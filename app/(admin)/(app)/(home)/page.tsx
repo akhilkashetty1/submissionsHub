@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Database, Highlighter, Inbox, TriangleAlert } from "lucide-react";
+import PortalIcon from "@/components/PortalIcon";
 import { requireUser } from "@/lib/auth";
 import { LEVEL_LABEL, levelFor, visibleProjects } from "@/lib/permissions";
 import { getProject } from "@/lib/projects";
@@ -52,9 +53,7 @@ export default async function Overview() {
               <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-[0.14] blur-2xl" style={{ background: p.accent }} />
               <div className="relative flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg ring-1 ring-black/[0.06]" style={{ background: `color-mix(in oklab, ${p.accent} 18%, white)` }}>
-                    <span className="h-3 w-3 rounded-[4px] ring-1 ring-black/10" style={{ background: p.accent }} />
-                  </span>
+                  <PortalIcon id={p.id} accent={p.accent} size="md" />
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold tracking-[-0.01em]">{p.name}</h2>
                     <p className="truncate text-xs text-muted">{p.description}</p>
@@ -130,7 +129,7 @@ export default async function Overview() {
                     className="group flex h-12 items-center gap-3 px-5 text-[0.8125rem] transition-colors hover:bg-paper-2"
                   >
                     <span className="flex w-28 shrink-0 items-center gap-2 text-xs font-medium text-ink-soft">
-                      <span className="h-2 w-2 shrink-0 rounded-[3px] ring-1 ring-black/10" style={{ background: p?.accent }} />
+                      {p && <PortalIcon id={p.id} accent={p.accent} size="xs" />}
                       <span className="truncate">{p?.short ?? r.project}</span>
                     </span>
                     <span className="min-w-0 flex-1 truncate font-medium text-ink">{r.title || "Untitled"}</span>

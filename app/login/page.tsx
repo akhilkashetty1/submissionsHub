@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import LoginForm from "@/components/LoginForm";
 import { PROJECTS } from "@/lib/projects";
+import PortalIcon from "@/components/PortalIcon";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -41,7 +42,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-4 py-3 ring-1 ring-white/[0.08] backdrop-blur"
                 style={{ marginLeft: `${i * 1.5}rem` }}
               >
-                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: p.accent }} />
+                <PortalIcon id={p.id} accent={p.accent} size="sm" />
                 <span className="text-sm font-medium text-white/90">{p.name}</span>
               </div>
             ))}

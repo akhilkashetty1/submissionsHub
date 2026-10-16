@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Clock } from "lucide-react";
+import PortalIcon from "@/components/PortalIcon";
 import SidebarToggle from "@/components/SidebarToggle";
 
-type Crumb = { label: string; href?: string; accent?: string };
+type Crumb = { label: string; href?: string; portal?: { id: string; accent: string } };
 
 /** Where you are, worked out from the address. Large screens only (phones have the top menu). */
 function crumbsFor(path: string, portals: Record<string, { name: string; accent: string }>): Crumb[] {
@@ -13,7 +14,7 @@ function crumbsFor(path: string, portals: Record<string, { name: string; accent:
   if (!parts.length) return [{ label: "Overview" }];
   if (parts[0] === "p" && parts[1]) {
     const p = portals[parts[1]];
-    const portal: Crumb = { label: p?.name ?? parts[1], href: `/p/${parts[1]}`, accent: p?.accent };
+    const portal: Crumb = { label: p?.name ?? parts[1], href: `/p/${parts[1]}`, portal: p ? { id: parts[1], accent: p.accent } : undefined };
     return parts[2] ? [portal, { label: `#${parts[2]}` }] : [{ ...portal, href: undefined }];
   }
   if (parts[0] === "users") return [{ label: "Admin" }, { label: "People & access" }];
@@ -37,12 +38,12 @@ export default function TopBar({ portals }: { portals: Record<string, { name: st
                 {i > 0 && <ChevronRight aria-hidden className="h-3.5 w-3.5 shrink-0 text-faint" />}
                 {c.href ? (
                   <Link href={c.href} className="flex min-w-0 items-center gap-2 truncate rounded-md px-1.5 py-1 text-muted transition hover:bg-paper-2 hover:text-ink">
-                    {c.accent && <span className="h-2 w-2 shrink-0 rounded-[3px] ring-1 ring-black/10" style={{ background: c.accent }} />}
+                    {c.portal && <PortalIcon id={c.portal.id} accent={c.portal.accent} size="xs" />}
                     {c.label}
                   </Link>
                 ) : (
                   <span aria-current={last ? "page" : undefined} className={`flex min-w-0 items-center gap-2 truncate px-1.5 py-1 ${last ? "font-medium text-ink" : "text-muted"}`}>
-                    {c.accent && <span className="h-2 w-2 shrink-0 rounded-[3px] ring-1 ring-black/10" style={{ background: c.accent }} />}
+                    {c.portal && <PortalIcon id={c.portal.id} accent={c.portal.accent} size="xs" />}
                     {c.label}
                   </span>
                 )}

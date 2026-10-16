@@ -7,6 +7,7 @@ import { projectStats } from "@/lib/submissions";
 import AppShell from "@/components/AppShell";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 import NavLink from "@/components/NavLink";
+import PortalIcon from "@/components/PortalIcon";
 import SignOutButton from "@/components/SignOutButton";
 import TopBar from "@/components/TopBar";
 
@@ -25,11 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const portals = projects.map((p) => ({
     href: `/p/${p.id}`,
     label: p.name,
-    icon: (
-      <span className="grid h-4 w-4 shrink-0 place-items-center">
-        <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: p.accent }} />
-      </span>
-    ),
+    icon: <PortalIcon id={p.id} accent={p.accent} />,
     count: user.mustChangePassword ? null : (stats[p.id]?.total ?? 0),
   }));
   const adminNav = [

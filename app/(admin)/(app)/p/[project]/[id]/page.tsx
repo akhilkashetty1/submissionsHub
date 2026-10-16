@@ -12,6 +12,7 @@ import CellMarkBadge from "@/components/CellMarkBadge";
 import DeleteSubmissionButton from "@/components/DeleteSubmissionButton";
 import ExportButton from "@/components/ExportButton";
 import MarkPicker from "@/components/MarkPicker";
+import PortalIcon from "@/components/PortalIcon";
 import NotesPanel from "@/components/NotesPanel";
 
 type Props = { params: Promise<{ project: string; id: string }> };
@@ -73,7 +74,7 @@ export default async function SubmissionPage({ params }: Props) {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-xs font-medium text-muted">
-                <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: project.accent }} />
+                <PortalIcon id={project.id} accent={project.accent} size="xs" />
                 {project.short}
                 <span className="text-faint">/</span>
                 <span className="font-mono tabular-nums">#{s.id}</span>

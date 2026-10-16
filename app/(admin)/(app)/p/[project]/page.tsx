@@ -10,6 +10,7 @@ import { availableColumns, getView } from "@/lib/views";
 import SubmissionsTable from "@/components/SubmissionsTable";
 import FilterBar from "@/components/FilterBar";
 import ExportButton from "@/components/ExportButton";
+import PortalIcon from "@/components/PortalIcon";
 import NavFade from "@/components/NavFade";
 import { MARKS } from "@/lib/marks";
 
@@ -69,9 +70,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     <div className="mx-auto max-w-[96rem] space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3.5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl ring-1 ring-black/[0.06]" style={{ background: `color-mix(in oklab, ${project.accent} 18%, white)` }}>
-            <span className="h-3.5 w-3.5 rounded-[4px] ring-1 ring-black/10" style={{ background: project.accent }} />
-          </span>
+          <PortalIcon id={project.id} accent={project.accent} size="lg" />
           <div className="min-w-0">
             <h1 className="page-title truncate">{project.name}</h1>
             <p className="mt-0.5 text-[0.8125rem] text-muted">

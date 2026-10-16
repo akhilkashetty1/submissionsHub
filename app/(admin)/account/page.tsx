@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { LEVEL_HELP, LEVEL_LABEL, levelFor } from "@/lib/permissions";
 import { PROJECTS } from "@/lib/projects";
 import AccountPassword from "@/components/AccountPassword";
+import PortalIcon from "@/components/PortalIcon";
 
 export const metadata: Metadata = { title: "Account" };
 
@@ -47,7 +48,7 @@ export default async function AccountPage() {
               return (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[0.8125rem]">
                   <span className="flex items-center gap-2 font-medium">
-                    <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: p.accent }} />
+                    <PortalIcon id={p.id} accent={p.accent} size="xs" />
                     {p.name}
                   </span>
                   {level ? (
