@@ -59,6 +59,16 @@ const SCHEMA = `
   alter table submissions add column if not exists mark_at timestamptz;
   create index if not exists submissions_project_mark on submissions (project, mark) where mark is not null;
 
+  -- Highlighting a single value (one cell) of a record, like colouring a cell in Excel
+  create table if not exists cell_marks (
+    submission_id  bigint      not null references submissions(id) on delete cascade,
+    col            text        not null,
+    mark           text        not null,
+    mark_by        text,
+    mark_at        timestamptz not null default now(),
+    primary key (submission_id, col)
+  );
+
   -- Notes on records
   create table if not exists submission_notes (
     id             bigserial primary key,
@@ -122,7 +132,8 @@ async function migrate() {
         and to_regclass('public.activity_log') is not null
         and to_regclass('public.user_access') is not null
         and to_regclass('public.submission_notes') is not null
-        and to_regclass('public.user_views') is not null as ok`,
+        and to_regclass('public.user_views') is not null
+        and to_regclass('public.cell_marks') is not null as ok`,
   );
   if (rows[0]?.ok) return;
 

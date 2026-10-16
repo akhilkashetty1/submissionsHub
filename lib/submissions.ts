@@ -23,6 +23,8 @@ export type Submission = {
   mark_by: string | null;
   mark_at: Date | null;
   note_count: number;
+  /** Colours on individual values: heading → colour id. */
+  cell_marks: Record<string, string>;
 };
 
 export type Incoming = { headers: string[]; values: string[]; submittedAt: Date | null; flagged: string[] };
@@ -133,7 +135,8 @@ function where(project: string, f: Filters) {
 const cols = (alias = "submissions") =>
   `${alias}.id::text as id, ${alias}.project, ${alias}.received_at, ${alias}.submitted_at, ${alias}.title, ${alias}.headers, ${alias}."values", ${alias}.flagged,
    ${alias}.mark, ${alias}.mark_by, ${alias}.mark_at,
-   (select count(*)::int from submission_notes sn where sn.submission_id = ${alias}.id) as note_count`;
+   (select count(*)::int from submission_notes sn where sn.submission_id = ${alias}.id) as note_count,
+   (select coalesce(json_object_agg(cm.col, cm.mark), '{}'::json) from cell_marks cm where cm.submission_id = ${alias}.id) as cell_marks`;
 
 /** Sort by the time received (RECEIVED) or by any column of the form, by its heading. */
 export type Sort = { col: string; dir: "asc" | "desc" };
@@ -327,4 +330,26 @@ export async function notesFor(submissionIds: string[]) {
   );
   for (const n of rows) map.set(n.submission_id, [...(map.get(n.submission_id) ?? []), n]);
   return map;
+}
+
+/* ---------------------------------------------------------- cell highlights */
+
+/**
+ * Colour one value (a column of one record), or clear it with null. The column must really be
+ * one of that record's headings and the record must belong to this portal. Returns false otherwise.
+ */
+export async function setCellMark(project: string, submissionId: string, col: string, mark: MarkId | null, by: string) {
+  if (!/^\d{1,18}$/.test(submissionId) || typeof col !== "string" || !col || col.length > 300) return false;
+  const [found] = await query<{ id: string }>(`select id::text from submissions where id = $1 and project = $2 and jsonb_exists(headers, $3)`, [submissionId, project, col]);
+  if (!found) return false;
+  if (mark === null) {
+    await query(`delete from cell_marks where submission_id = $1 and col = $2`, [submissionId, col]);
+  } else {
+    await query(
+      `insert into cell_marks (submission_id, col, mark, mark_by) values ($1, $2, $3, $4)
+       on conflict (submission_id, col) do update set mark = excluded.mark, mark_by = excluded.mark_by, mark_at = now()`,
+      [submissionId, col, mark, by],
+    );
+  }
+  return true;
 }

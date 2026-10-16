@@ -127,15 +127,23 @@ export default async function SubmissionPage({ params }: Props) {
       />
 
       <dl className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
-        {rows.map(({ h, v }) => (
-          <div key={h} className={cn("grid gap-1 px-5 py-3 text-sm sm:grid-cols-[1fr_minmax(8rem,16rem)] sm:gap-6", flagged.has(h) && "bg-flag-wash/60")}>
+        {rows.map(({ h, v }) => {
+          const cm = markById(s.cell_marks[h]);
+          return (
+          <div
+            key={h}
+            style={cm ? { backgroundColor: cm.bg, boxShadow: `inset 4px 0 0 ${cm.dot}` } : undefined}
+            className={cn("grid gap-1 px-5 py-3 text-sm sm:grid-cols-[1fr_minmax(8rem,16rem)] sm:gap-6", flagged.has(h) && !cm && "bg-flag-wash/60")}
+          >
             <dt className="text-ink-soft">
               {h}
+              {cm && <span className="ml-2 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold text-white" style={{ backgroundColor: cm.dot }}>{cm.label}</span>}
               {remarks.has(h) && <span className="mt-0.5 block text-xs italic text-muted">Remarks: {remarks.get(h) || "—"}</span>}
             </dt>
             <dd className={cn("whitespace-pre-wrap break-words font-medium sm:text-right", flagged.has(h) && "text-flag")}>{v || <span className="text-muted">—</span>}</dd>
           </div>
-        ))}
+          );
+        })}
       </dl>
     </div>
   );

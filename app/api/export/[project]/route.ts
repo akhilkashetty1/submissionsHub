@@ -75,6 +75,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
       });
       row.getCell(3).font = { bold: true, color: { argb: argb(mark.dot) } };
     }
+    // A colour on a single value
+    for (const [heading, markId] of Object.entries(r.cell_marks)) {
+      const col = columns.indexOf(heading);
+      const m = markById(markId);
+      if (col < 0 || !m) continue;
+      const cell = row.getCell(col + FIXED + 1);
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(m.dot) } };
+      cell.font = { bold: true, color: { argb: m.id === "amber" ? "FF15171B" : "FFFFFFFF" } };
+    }
     for (const f of r.flagged) {
       const col = columns.indexOf(f);
       if (col < 0) continue;

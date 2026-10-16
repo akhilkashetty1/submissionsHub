@@ -3,7 +3,7 @@
 import { authorise } from "@/lib/access";
 import { isMark } from "@/lib/marks";
 import { can } from "@/lib/permissions";
-import { MAX_NOTE, addNote, deleteNoteById, getNote, setMarkByIds, setMarkMatching, type Filters, type Note } from "@/lib/submissions";
+import { MAX_NOTE, addNote, deleteNoteById, getNote, setCellMark, setMarkByIds, setMarkMatching, type Filters, type Note } from "@/lib/submissions";
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -69,4 +69,19 @@ export async function removeNote(projectId: string, noteId: string): Promise<Res
   if (!mine && !can(auth.user, auth.project.id, "manage")) return { ok: false, error: "Only the author or a manager can delete this note." };
   await deleteNoteById(note.id);
   return { ok: true };
+}
+
+/** Colour a single value of a record (or clear it with null). Needs Contributor. */
+export async function setCellMarkAction(projectId: string, submissionId: string, col: string, mark: string | null): Promise<Result> {
+  const auth = await authorise(projectId, "write");
+  if (!auth.ok) return auth;
+  const m = parseMark(mark);
+  if (m === undefined) return { ok: false, error: "Unknown colour." };
+  try {
+    const done = await setCellMark(auth.project.id, String(submissionId), String(col), m, auth.user.displayName);
+    return done ? { ok: true } : { ok: false, error: "That value no longer exists." };
+  } catch (err) {
+    console.error("setCellMark failed", err);
+    return { ok: false, error: "Could not save. Try again." };
+  }
 }

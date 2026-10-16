@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, Columns3, MessageSquare, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, Columns3, MessageSquare, MoreHorizontal, Trash2, TriangleAlert, X } from "lucide-react";
 import { deleteAllMatching, deleteSubmissions } from "@/app/actions";
 import { resetViewAction, saveViewAction } from "@/app/view-actions";
 import ColumnPicker, { type SaveState } from "@/components/ColumnPicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import MarkPicker from "@/components/MarkPicker";
+import QuickActions, { type QuickTarget } from "@/components/QuickActions";
 import { markById } from "@/lib/marks";
 import { startNav } from "@/lib/nav-state";
 import { cn } from "@/lib/utils";
@@ -23,30 +24,40 @@ export type TableRow = {
   data: Record<string, string>;
   /** Headings whose answers were flagged. */
   flaggedCols: string[];
+  /** Colours on individual values: heading → colour. */
+  cellMarks: Record<string, string>;
 };
 export type TableFilters = { q: string; from: string; to: string; mark: string; notes: string };
 export type TableSort = { col: string; dir: "asc" | "desc" } | null;
+
+/** Changes made in this session that the server hasn't sent back yet (so the table reacts instantly). */
+type Overrides = Record<string, { mark?: string | null; notes?: number; cells?: Record<string, string | null> }>;
 
 const RECEIVED = "received";
 const DEFAULT_WIDTH = 170;
 const MIN_WIDTH = 70;
 const MAX_WIDTH = 900;
 const CHECK_W = 44;
-const RECEIVED_W = 232;
+const RECEIVED_W = 256;
+
+const elementOf = (n: Node | null) => (n instanceof Element ? n : n?.parentElement ?? null);
 
 /**
  * The submissions grid, built to feel like a spreadsheet:
  *
  * - Choose your own columns from everything the form collected (Columns button); remembered per person.
  * - Scrolls sideways and down inside the table, with the checkbox and Received columns and the heading
- *   row frozen in place, and edge shadows hinting there's more.
+ *   row frozen, and edge shadows hinting there's more.
  * - Drag a column's right edge to resize it (double-click to reset); click a heading to sort by it.
- * - Flagged answers are marked in red right in the grid; highlighted rows are tinted.
+ * - Flagged answers are marked in red in the grid; highlighted rows and values are tinted.
+ * - Act right where you are: select text in a cell, right-click a row, or press its ⋯ to colour that value or
+ *   the whole row, or add a note (pre-filled with what you selected). No need to open the record.
  * - Tick rows to highlight or (Managers) delete them, or "Select all N" across every page of a filter.
  */
 export default function SubmissionsTable({
   projectId,
   projectShort,
+  titleColumn,
   available,
   defaults,
   initialColumns,
@@ -62,6 +73,8 @@ export default function SubmissionsTable({
 }: {
   projectId: string;
   projectShort: string;
+  /** Which column names a record (for the quick-actions heading). */
+  titleColumn: string;
   /** Every column the records have, for the Columns panel. */
   available: string[];
   /** The portal's default columns. */
@@ -95,6 +108,18 @@ export default function SubmissionsTable({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const firstRun = useRef(true);
 
+  // ---- quick actions (select text / right-click / ⋯)
+  const [quick, setQuick] = useState<QuickTarget | null>(null);
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [overridesFor, setOverridesFor] = useState(rows);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Fresh rows from the server replace anything we were showing optimistically.
+  if (overridesFor !== rows) {
+    setOverridesFor(rows);
+    setOverrides({});
+  }
+
   // ---- scrolling
   const scroller = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -111,6 +136,16 @@ export default function SubmissionsTable({
   const canSelectAll = allOnPage && !allMatching && total > rows.length;
   const flaggedOnPage = useMemo(() => [...new Set(rows.flatMap((r) => r.flaggedCols))], [rows]);
   const isDefaultLayout = columns.length === defaults.length && columns.every((c, i) => c === defaults[i]) && Object.keys(widths).length === 0;
+  const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
+
+  // What a row looks like right now, including changes the server hasn't confirmed yet.
+  const rowMark = (r: TableRow) => (overrides[r.id] && "mark" in overrides[r.id] ? overrides[r.id].mark ?? null : r.mark);
+  const rowNotes = (r: TableRow) => r.notes + (overrides[r.id]?.notes ?? 0);
+  const cellMark = (r: TableRow, c: string) => {
+    const o = overrides[r.id]?.cells;
+    return o && c in o ? o[c] : (r.cellMarks[c] ?? null);
+  };
+  const titleOf = (r: TableRow) => r.data[titleColumn] || `#${r.id}`;
 
   // Remember the layout (debounced). Going back to exactly the default forgets the customisation instead.
   useEffect(() => {
@@ -140,6 +175,12 @@ export default function SubmissionsTable({
       el.removeEventListener("scroll", measure);
     };
   }, []);
+
+  const showToast = (message: string) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2600);
+  };
 
   const changeColumns = (next: string[]) => {
     setSaveState("saving");
@@ -228,13 +269,60 @@ export default function SubmissionsTable({
     });
   };
 
-  // Clicking anywhere on a row opens it (unless the click was a control or the start of selecting text).
+  // Clicking anywhere on a row opens it (unless it was a control, the start of selecting text, or just dismissing the pill).
   const openRow = (e: React.MouseEvent, id: string) => {
+    if (quick) return setQuick(null);
     if ((e.target as HTMLElement).closest("input, button, a, [data-no-open]")) return;
     if (window.getSelection()?.toString()) return;
     startNav();
     router.push(`/p/${projectId}/${id}`);
   };
+
+  // ---- quick actions: three ways in
+  const rowFromNode = (n: Node | null) => {
+    const tr = elementOf(n)?.closest<HTMLElement>("tr[data-row]");
+    return tr ? { tr, row: byId.get(tr.dataset.row!) } : null;
+  };
+  const cellFromNode = (n: Node | null) => elementOf(n)?.closest<HTMLElement>("td[data-col]") ?? null;
+
+  /** 1) Select text in a cell (or across a row). */
+  const onSelectEnd = () => {
+    if (!canWrite) return;
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+      const text = sel.toString().replace(/\s+/g, " ").trim();
+      if (!text || text.length > 400) return;
+      const range = sel.getRangeAt(0);
+      const start = rowFromNode(range.startContainer);
+      const end = rowFromNode(range.endContainer);
+      if (!start?.row || start.tr !== end?.tr) return; // the selection must stay inside one record
+      const cell = cellFromNode(range.startContainer);
+      const col = cell && cell === cellFromNode(range.endContainer) ? (cell.dataset.col ?? null) : null;
+      const rect = range.getBoundingClientRect();
+      setQuick({ anchor: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }, rowId: start.row.id, title: titleOf(start.row), col, quote: text, value: col ? (start.row.data[col] ?? "") : "" });
+    }, 0);
+  };
+
+  /** 2) Right-click a row. Viewers keep the browser's own menu. */
+  const onRowContext = (e: React.MouseEvent, r: TableRow) => {
+    if (!canWrite || (e.target as HTMLElement).closest("input, a, button")) return;
+    e.preventDefault();
+    const cell = cellFromNode(e.target as Node);
+    const col = cell?.dataset.col ?? null;
+    const picked = window.getSelection()?.toString().replace(/\s+/g, " ").trim() ?? "";
+    const insideCell = !!cell && !!window.getSelection()?.anchorNode && cell.contains(window.getSelection()!.anchorNode);
+    setQuick({ anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 }, rowId: r.id, title: titleOf(r), col, quote: insideCell ? picked : "", value: col ? (r.data[col] ?? "") : "" });
+  };
+
+  /** 3) The ⋯ button on a row. */
+  const onRowButton = (e: React.MouseEvent, r: TableRow) => {
+    e.stopPropagation();
+    const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setQuick({ anchor: { x: b.left, y: b.top, w: b.width, h: b.height }, rowId: r.id, title: titleOf(r), col: null, quote: "", value: "" });
+  };
+
+  const quickRow = quick ? byId.get(quick.rowId) : undefined;
 
   const scope = filtered ? "matching your filters" : `in ${projectShort}`;
   const th = "border-b border-r border-line bg-paper-2 px-3 py-2 text-left align-bottom text-[0.7rem] font-semibold uppercase leading-tight tracking-wide text-muted";
@@ -254,7 +342,9 @@ export default function SubmissionsTable({
           <Columns3 className="h-4 w-4" /> Columns
           <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", pickerOpen ? "bg-white/15" : "bg-paper-2 text-ink-soft")}>{columns.length}</span>
         </button>
-        <p className="hidden text-xs text-muted sm:block">Drag a column edge to resize · click a heading to sort · scroll sideways for more</p>
+        <p className="hidden text-xs text-muted sm:block">
+          {canWrite ? "Select text to highlight or add a note · right-click a row · " : ""}drag a column edge to resize · click a heading to sort
+        </p>
       </div>
 
       {notice && (
@@ -285,7 +375,7 @@ export default function SubmissionsTable({
       )}
 
       <div className="relative overflow-hidden rounded-2xl border border-line bg-paper shadow-sm" style={{ "--sticky": `${stickyLeft}px` } as React.CSSProperties}>
-        <div ref={scroller} className="max-h-[72dvh] overflow-auto overscroll-x-contain" tabIndex={0} aria-label="Submissions table, scrollable">
+        <div ref={scroller} onMouseUp={onSelectEnd} onKeyUp={(e) => e.shiftKey && onSelectEnd()} className="max-h-[72dvh] overflow-auto overscroll-x-contain" tabIndex={0} aria-label="Submissions table, scrollable">
           <table ref={tableRef} className="border-separate border-spacing-0 text-sm" style={{ width: tableWidth, minWidth: "100%", tableLayout: "fixed" }}>
             <colgroup>
               {selectable && <col style={{ width: CHECK_W }} />}
@@ -337,14 +427,18 @@ export default function SubmissionsTable({
             <tbody>
               {rows.map((r) => {
                 const on = allMatching || selected.has(r.id);
-                const mark = markById(r.mark);
+                const mark = markById(rowMark(r));
+                const notes = rowNotes(r);
+                const active = quick?.rowId === r.id;
                 const cell = "border-b border-line px-3 py-2.5";
                 return (
                   <tr
                     key={r.id}
+                    data-row={r.id}
                     onClick={(e) => openRow(e, r.id)}
+                    onContextMenu={(e) => onRowContext(e, r)}
                     style={!on && mark ? { backgroundColor: mark.bg } : undefined}
-                    className={cn("group cursor-pointer", on ? "bg-[#f6f7cf]" : !mark && "bg-paper hover:bg-paper-2")}
+                    className={cn("group cursor-pointer", on ? "bg-[#f6f7cf]" : !mark && "bg-paper hover:bg-paper-2", active && "outline outline-2 -outline-offset-2 outline-brand")}
                   >
                     {selectable && (
                       <td className={cn(cell, "z-[5] bg-inherit px-4 md:sticky md:left-0")}>
@@ -359,31 +453,47 @@ export default function SubmissionsTable({
                       </td>
                     )}
                     <td className={cn(cell, "z-[5] border-r bg-inherit px-2 md:sticky", selectable ? "md:left-[44px]" : "md:left-0")}>
-                      <Link href={`/p/${projectId}/${r.id}`} className="flex items-center gap-2 whitespace-nowrap text-ink-soft">
-                        {mark && <span title={mark.label} aria-label={mark.label} className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: mark.dot }} />}
-                        <span className="min-w-0 flex-1 truncate">{r.received}</span>
-                        {r.flags > 0 && (
-                          <span title={`${r.flags} flagged`} className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-flag">
-                            <TriangleAlert className="h-3 w-3" />
-                            {r.flags}
-                          </span>
+                      <div className="flex items-center gap-1.5">
+                        <Link href={`/p/${projectId}/${r.id}`} className="flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap text-ink-soft">
+                          {mark && <span title={mark.label} aria-label={mark.label} className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: mark.dot }} />}
+                          <span className="min-w-0 flex-1 truncate">{r.received}</span>
+                          {r.flags > 0 && (
+                            <span title={`${r.flags} flagged`} className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-flag">
+                              <TriangleAlert className="h-3 w-3" />
+                              {r.flags}
+                            </span>
+                          )}
+                          {notes > 0 && (
+                            <span title={`${notes} note${notes === 1 ? "" : "s"}`} className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-ink-soft">
+                              <MessageSquare className="h-3 w-3" />
+                              {notes}
+                            </span>
+                          )}
+                        </Link>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            onClick={(e) => onRowButton(e, r)}
+                            title="Highlight or add a note"
+                            aria-label={`Quick actions for ${titleOf(r)}`}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition hover:bg-black/5 hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
                         )}
-                        {r.notes > 0 && (
-                          <span title={`${r.notes} note${r.notes === 1 ? "" : "s"}`} className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-ink-soft">
-                            <MessageSquare className="h-3 w-3" />
-                            {r.notes}
-                          </span>
-                        )}
-                      </Link>
+                      </div>
                     </td>
                     {columns.map((c, i) => {
                       const v = r.data[c] ?? "";
                       const flagged = r.flaggedCols.includes(c);
+                      const cm = markById(cellMark(r, c));
                       return (
                         <td
                           key={c}
+                          data-col={c}
                           title={v}
-                          className={cn(cell, "overflow-hidden text-ellipsis whitespace-nowrap", i === 0 && "font-medium", flagged && "bg-flag-wash font-semibold text-flag")}
+                          style={cm ? { backgroundColor: cm.bg, boxShadow: `inset 4px 0 0 ${cm.dot}` } : undefined}
+                          className={cn(cell, "overflow-hidden text-ellipsis whitespace-nowrap", i === 0 && "font-medium", flagged && !cm && "bg-flag-wash font-semibold text-flag", flagged && cm && "font-semibold text-flag")}
                         >
                           {v || <span className="text-muted">—</span>}
                         </td>
@@ -440,6 +550,37 @@ export default function SubmissionsTable({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {quick && quickRow && (
+        <QuickActions
+          key={`${quick.rowId}|${quick.col ?? ""}|${quick.quote}|${quick.anchor.x}|${quick.anchor.y}`}
+          projectId={projectId}
+          target={quick}
+          rowMark={rowMark(quickRow)}
+          cellMark={quick.col ? cellMark(quickRow, quick.col) : null}
+          rowCopyText={columns.map((c) => quickRow.data[c] ?? "").join("\t")}
+          canWrite={canWrite}
+          onClose={() => setQuick(null)}
+          onMarked={(markScope, mark) => {
+            setOverrides((o) => ({
+              ...o,
+              [quick.rowId]: markScope === "row" ? { ...o[quick.rowId], mark } : { ...o[quick.rowId], cells: { ...o[quick.rowId]?.cells, [quick.col as string]: mark } },
+            }));
+            router.refresh();
+          }}
+          onNoted={() => {
+            setOverrides((o) => ({ ...o, [quick.rowId]: { ...o[quick.rowId], notes: (o[quick.rowId]?.notes ?? 0) + 1 } }));
+            router.refresh();
+          }}
+          onToast={showToast}
+        />
+      )}
+
+      {toast && (
+        <div role="status" aria-live="polite" className="fixed left-1/2 top-4 z-[60] -translate-x-1/2 rounded-full bg-night px-4 py-2 text-sm font-medium text-white shadow-2xl ring-1 ring-night-line">
+          {toast}
         </div>
       )}
 

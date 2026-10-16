@@ -110,6 +110,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
             key={`${page}|${filterQuery}|${sort?.col ?? ""}|${sort?.dir ?? ""}`}
             projectId={project.id}
             projectShort={project.short}
+            titleColumn={project.titleColumn}
             available={available}
             defaults={project.listColumns}
             initialColumns={initialColumns}
@@ -122,6 +123,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
               flags: r.flagged.length,
               data: Object.fromEntries(r.headers.map((h, i) => [h, (r.values[i] ?? "").slice(0, CELL_MAX)])),
               flaggedCols: r.flagged,
+              cellMarks: r.cell_marks,
             }))}
             total={total}
             filters={filters}

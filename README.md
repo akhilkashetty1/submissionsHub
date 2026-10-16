@@ -183,6 +183,7 @@ collide (this works through Neon's connection pooler).
 | `users` | People: `username` (unique, case-insensitive), `display_name`, `password_hash`, `is_admin`, `active`, `must_change_password`, `session_version`, timestamps. The owner is **not** in this table. |
 | `user_access` | `(user_id, project, level)` with level `read` / `write` / `manage`. |
 | `user_views` | Each person's saved table columns and widths per portal (`user_id` 0 = owner). |
+| `cell_marks` | Colour on a single value: `(submission_id, col)` primary key (**cascades on delete**), `mark`, `mark_by`, `mark_at`. `col` must be one of the record's own headings. |
 | `activity_log` | Audit trail: deletes and user changes. |
 | `ingest_log`, `login_failures` | Rate-limit bookkeeping (kept small; old rows are pruned). |
 
@@ -286,6 +287,12 @@ How it is enforced (all in code, not just hidden buttons):
   highlight picker, notes (newest first; author or a Manager can delete), prev/next.
 - **Highlights:** five colours with meanings (`lib/marks.ts`: Needs action, Follow up, Done / OK, For info, Escalated),
   set per record, on ticked rows, or on everything a filter matches. Tinted in the list and kept in Excel.
+- **Quick actions in the table (Contributor+):** select text in a cell, right-click a row, or press a row's `⋯`
+  (`components/QuickActions.tsx`, wired in `SubmissionsTable.tsx`). A floating pill offers colour (**This value** →
+  `cell_marks`, or **Whole row** → `submissions.mark`), Add note (pre-filled with the selected quote and column),
+  Copy selection/value, Copy row (tab-separated, pastes into Excel) and Open. Keys 1-5 pick a colour, 0 clears,
+  Esc closes. Pressing the colour already set clears it. Viewers never see the pill. Server action:
+  `setCellMarkAction` in `app/record-actions.ts`; cell colours also show on the record page and as cell fills in the Excel export.
 - **Delete (Manager):** tick rows or "Select all N" across pages; confirm; bulk "all matching" requires typing `DELETE`.
   Logged in the activity log.
 - **Export to Excel:** current filters (or one record). Includes **all** columns (not just the ones on screen),
