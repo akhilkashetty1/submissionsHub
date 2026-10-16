@@ -1,151 +1,438 @@
 # Submissions Hub
 
-One database and one admin login for every form:
-**2W Ride Along**, **4W Ride Along** and **RoadShield** enquiries.
+One database and one admin for every form the team runs: **2W Ride Along**, **4W Ride Along** and
+**RoadShield** enquiries. Every submission lands here, and people with the right access can search, sort,
+highlight, annotate, export and (if allowed) delete them. It replaces working out of Google Sheets.
 
-Each project keeps sending to its Google Sheet and email exactly as before. The hub is an
-**extra** destination, and the real record: a header someone edits in a Sheet can't
-break it, and no single service going down loses an entry.
+> **If you are a new developer or an AI agent picking this up, read this file top to bottom first.** It records
+> what exists, *how it was set up* (database, hosting, keys, how the other projects connect), why it was built
+> this way, and the gotchas that cost time. Section 12 is a symptom → cause → fix table.
 
-```
-2W form ──┐
-4W form ──┼──►  POST /api/ingest/{project}  ──►  Postgres (Neon)
-RoadShield┘                                          │
-                         /admin pages  ◄─────────────┘   (one login, read-only, Excel export)
-```
+## Contents
 
-## Tech stack
+1. [At a glance](#1-at-a-glance)
+2. [Architecture](#2-architecture)
+3. [How it was set up (the database and hosting story)](#3-how-it-was-set-up)
+4. [Connecting the other projects](#4-connecting-the-other-projects)
+5. [Environment variables](#5-environment-variables)
+6. [The database](#6-the-database)
+7. [The ingest API](#7-the-ingest-api)
+8. [People, access and security](#8-people-access-and-security)
+9. [What the admin does](#9-what-the-admin-does)
+10. [Code map](#10-code-map)
+11. [Runbook: everyday jobs](#11-runbook-everyday-jobs)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Developing and testing](#13-developing-and-testing)
+14. [Decisions, gotchas and known limits](#14-decisions-gotchas-and-known-limits)
+15. [Related projects and history](#15-related-projects-and-history)
+
+---
+
+## 1. At a glance
 
 | | |
 |---|---|
-| Framework | Next.js 16 (App Router), TypeScript, Tailwind v4 |
-| Database | Postgres via `pg`: Neon on Vercel, any Postgres locally |
-| Auth | One admin account: scrypt-hashed password, signed httpOnly session cookie |
-| Export | `.xlsx` via exceljs |
-| Hosting | Vercel |
+| Live admin | https://submissions-hub.vercel.app |
+| Repo | https://github.com/akhilkashetty1/submissionsHub (private), `main` auto-deploys on Vercel |
+| Stack | Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Postgres via `pg` · exceljs |
+| Database | **Neon Postgres**, added through Vercel (Storage / Marketplace) on the free plan |
+| Hosting | Vercel (project name `submissions-hub`) |
+| Sends data here | `rideAlong2w` (2W), `rideAlong4w` (4W), `roadshield1` (RoadShield): each posts server-to-server |
+| Local dev | `npm run dev` on port **3400**, against any local Postgres |
+| Health check | `GET /api/health` → `{"database":true,"adminLogin":true}` when everything is configured |
 
-## Local development
+The three source projects keep working exactly as before (Google Sheet + Brevo email). **The hub is an
+additional destination**, and it is the one that does not break when someone edits a spreadsheet heading.
 
-```bash
-createdb submissions_hub_dev        # any local Postgres
-cp .env.example .env.local          # then fill it in (below)
-npm install
-npm run dev                         # http://localhost:3400
+## 2. Architecture
+
+```
+                    server → server, header x-hub-key (one secret per project)
+ 2W  (rideAlong2w)  ──┐
+ 4W  (rideAlong4w)  ──┼──►  POST /api/ingest/{2w|4w|roadshield}  ──►  Postgres (Neon)
+ RoadShield (roadshield1) ┘                                              ▲
+                                                                          │ queries (lib/*.ts)
+                          Admin app: sign-in · portals · records · people ┘
+                          Excel export · notes · highlights · activity log
 ```
 
-The tables are created automatically on first request.
+- **Each submission is stored whole**, as the form's own ordered column headings plus their values (`headers`
+  and `values` JSON arrays). There is no fixed column list, so a form can add or reword questions without
+  touching the hub, and nobody can "break the format" by editing a header.
+- **The other projects send to every place they're configured, in parallel**, and count an entry as saved if
+  *any* channel accepted it (Sheet, hub, email). One outage doesn't lose data. See each project's
+  `app/api/.../route` file.
+- **The admin app reads the database directly** in server components. There's no separate API for the UI.
+- **Everything is dynamic** (`force-dynamic` layouts, cookies read per request). There's no static caching of
+  data pages.
 
-## Setting it up on Vercel
+## 3. How it was set up
 
-1. Import the repo into Vercel.
-2. **Storage → Create → Neon (Postgres)** and connect it to the project. This sets `DATABASE_URL`.
-3. Generate secrets locally and add them as Environment Variables:
+This is the order things were actually done, so it can be repeated (new environment, disaster recovery) or
+explained. Nothing here needs a terminal on the server: it is Vercel + Neon + a few environment variables.
+
+### 3.1 Why a hub at all
+The earlier setup was a Create React App on GitHub Pages plus an Express server on Render, writing rows to a
+Google Sheet via an Apps Script. Two things went wrong in practice: the Render server lapsed and entries were
+lost, and someone edited a sheet heading and rows stopped lining up. The Sheet *was* the database. The hub
+moves the real record into Postgres, while the Sheets and Brevo email keep working as parallel backups.
+
+### 3.2 Why Neon (Postgres) on Vercel
+Volume is tiny (about 100 entries a month per form, far fewer for RoadShield), so any free tier is big enough.
+What matters is that it never switches off or refuses a write. Neon's compute **sleeps when idle but wakes on
+the next request** (first request after quiet is a little slower; nothing is lost). Supabase's free tier
+*pauses a project after about a week of inactivity* (at the time of writing; check current terms), which RoadShield would hit
+regularly, so it was ruled out.
+Plain `pg` is used (no ORM) so the same code runs on a local Postgres and on Neon.
+
+### 3.3 Steps that were taken
+1. **Created the GitHub repo** (`akhilkashetty1/submissionsHub`, private, empty) and pushed this code to `main`.
+2. **Vercel → Add New → Project → import the repo.** Defaults as detected (Next.js). The first deploy builds
+   fine but the app can't work until steps 3–4 (health shows `database:false`), which is expected.
+3. **Added the database from Vercel.** In the new project: *Storage / Marketplace → Neon → Create*:
+   - **Plan:** Free. **Region:** the one nearest India (Singapore, or Mumbai if offered). This was the recommendation; check
+     the Neon console for the region actually in use.
+   - **Environments:** connect to **Production, Preview and Development**.
+   - **Custom Prefix:** left **empty**: the code reads exactly `DATABASE_URL`, and a prefix would rename it.
+   - **Database branches for deployments:** left **off**. It would give every preview deployment its own copy of
+     the database, which only creates empty previews and eats the free plan's limits. One database is right.
+   - The integration may also add `POSTGRES_*` / `PG*` variables. They're harmless; the app uses `DATABASE_URL`
+     (and falls back to `POSTGRES_URL`).
+   - Recommended: *Settings → Functions → Function Region* → Mumbai (`bom1`) so the app runs near the database.
+4. **Generated secrets on a personal machine** (never in a chat or a commit). From this repo:
    ```bash
-   npm run secrets          # SESSION_SECRET, INGEST_KEY_2W, INGEST_KEY_4W, INGEST_KEY_ROADSHIELD
-   npm run hash-password    # ADMIN_PASSWORD_HASH (password typed hidden)
+   npm run secrets         # prints SESSION_SECRET and one INGEST_KEY_* per project (random 32 bytes each)
+   npm run hash-password   # asks for the admin password (hidden), prints ADMIN_PASSWORD_HASH=scrypt.…
    ```
-   Also set `ADMIN_USERNAME`.
-4. Redeploy, then open `https://<hub-domain>/api/health`. It should show
-   `{"database":true,"adminLogin":true}`.
-5. In each project's Vercel settings, add:
+   Run `npm run secrets` **once** and save the output in a password manager: running it again makes brand-new
+   values, and the project keys must match the hub's.
+5. **Added six environment variables** in Vercel → Settings → Environment Variables (all environments):
+   `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `INGEST_KEY_2W`, `INGEST_KEY_4W`,
+   `INGEST_KEY_ROADSHIELD`. (`DATABASE_URL` came from step 3.)
+6. **Redeployed** (variables only apply to builds made *after* they're added) and opened `/api/health`:
+   `{"database":true,"adminLogin":true}`. Then signed in as the owner.
+7. **Connected the three projects** (section 4), redeployed each, and sent a test entry through each one. All
+   three arrive in the hub. (Delete any leftover test entries from the admin: tick them → Delete.)
 
-   | Project | `HUB_INGEST_URL` | `HUB_INGEST_KEY` |
-   |---|---|---|
-   | 2W | `https://<hub-domain>/api/ingest/2w` | hub's `INGEST_KEY_2W` |
-   | 4W | `https://<hub-domain>/api/ingest/4w` | hub's `INGEST_KEY_4W` |
-   | RoadShield | `https://<hub-domain>/api/ingest/roadshield` | hub's `INGEST_KEY_ROADSHIELD` |
+The tables are created by the app itself on first use; there's no SQL to run by hand (section 6).
 
-## Environment variables
+### 3.4 Local development setup
+```bash
+createdb submissions_hub_dev                 # any local Postgres works
+cp .env.example .env.local                   # fill in, see section 5
+npm install
+npm run dev                                  # http://localhost:3400
+```
+For `.env.local`: `DATABASE_URL=postgres://localhost/submissions_hub_dev`, plus `npm run secrets` output and a
+hash from `npm run hash-password`. **`.env.local` is git-ignored: never commit it.**
 
-| Variable | Purpose |
+## 4. Connecting the other projects
+
+Each project's server posts to the hub with its own secret. A key can only write to **its own** project.
+
+| Project (repo) | `HUB_INGEST_URL` | `HUB_INGEST_KEY` (value of the hub's…) | Sends |
+|---|---|---|---|
+| 2W (`rideAlong2w`, site `ride-along-form.in`) | `https://submissions-hub.vercel.app/api/ingest/2w` | `INGEST_KEY_2W` | `{ fields: {…} }` (the form's flat answers) |
+| 4W (`rideAlong4w`) | `https://submissions-hub.vercel.app/api/ingest/4w` | `INGEST_KEY_4W` | `{ headers, values, submittedAt, flagged }` |
+| RoadShield (`roadshield1`, `www.road-shield.in`) | `https://submissions-hub.vercel.app/api/ingest/roadshield` | `INGEST_KEY_ROADSHIELD` | `{ headers, values }` |
+
+Set both as Environment Variables in **that project's** Vercel settings, then **redeploy** it. If they're unset
+the project still works (Sheet/email only); it just doesn't send to the hub.
+
+Where the sending code lives:
+- 2W: `app/api/submit-to-sheets/route.js` (replaced the old Express server on Render).
+- 4W: `app/api/submit/route.ts` (validates server-side, then Sheet + Brevo + hub in parallel).
+- RoadShield: `app/api/contact/route.ts` (Brevo + Sheet + hub).
+
+**Rotating a project's key:** generate a new random value, update `INGEST_KEY_*` in the hub's Vercel settings
+*and* `HUB_INGEST_KEY` in that project's, redeploy both. Entries sent between the two redeploys get a 401 from the
+hub (the project logs it, and still saves to its other channels).
+
+## 5. Environment variables
+
+**On the hub** (Vercel → `submissions-hub` → Settings → Environment Variables):
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | yes | Postgres connection string (set by the Neon integration; falls back to `POSTGRES_URL`) |
+| `ADMIN_USERNAME` | yes | Username of the **owner** account (the one that can never be locked out) |
+| `ADMIN_PASSWORD_HASH` | yes | Owner password as `scrypt.<salt>.<hash>`, from `npm run hash-password` (never the plain password) |
+| `SESSION_SECRET` | yes | ≥ 32 random chars; signs the session cookie. **Changing it signs everyone out.** |
+| `INGEST_KEY_2W` / `INGEST_KEY_4W` / `INGEST_KEY_ROADSHIELD` | yes | One secret per project (≥ 24 chars) |
+| `STORAGE_LIMIT_MB` | no | Plan storage limit for the Overview meter (default 1024) |
+| `INGEST_ORIGINS_2W` | no | Allows browsers on those site addresses to post to the 2W endpoint with **no key**, rate-limited. Not needed: 2W now posts from its own server. Leave empty. |
+
+**On each sending project:** `HUB_INGEST_URL`, `HUB_INGEST_KEY` (section 4). They also keep their own
+`GOOGLE_SHEET_WEBAPP_URL` and Brevo variables.
+
+`/api/health` reports `adminLogin:true` only when `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` and a ≥ 32-char
+`SESSION_SECRET` are all set. `.env.example` lists everything with comments.
+
+## 6. The database
+
+Postgres. **The schema creates and upgrades itself**: the first query after a cold start runs `migrate()` in
+`lib/db.ts`, which is idempotent (`create table if not exists`, `add column if not exists`, `create index if not
+exists`). It first runs a cheap check and does nothing if everything already exists; otherwise it applies the
+schema inside a transaction guarded by `pg_advisory_xact_lock(727001)`, so two servers starting together can't
+collide (this works through Neon's connection pooler).
+
+| Table | What it holds |
 |---|---|
-| `DATABASE_URL` | Postgres connection (set by the Neon integration) |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | The one admin login |
-| `SESSION_SECRET` | Signs session cookies. Changing it signs everyone out. |
-| `INGEST_KEY_2W`, `INGEST_KEY_4W`, `INGEST_KEY_ROADSHIELD` | Each project's secret; a key only writes to its own project |
-| `STORAGE_LIMIT_MB` | Optional: your plan's storage limit in MB for the Overview meter (default 1024) |
-| `INGEST_ORIGINS_2W` | Optional: lets a browser post directly from these site addresses (not needed now that 2W has its own server route) |
+| `submissions` | One row per entry: `project`, `received_at`, `submitted_at` (when completed on a device, if sent later), `title`, `headers` + `values` (JSON arrays), `flagged` (JSON array of headings), `search` (lowercased text for searching), `fingerprint`, `mark` / `mark_by` / `mark_at` (highlight). Unique on `(project, fingerprint)` so identical resends are stored once. |
+| `submission_notes` | Notes on a record: `submission_id` (**cascades on delete**), author id and **author name copied in** (so deleting a user keeps the name), `body`, `created_at`. |
+| `users` | People: `username` (unique, case-insensitive), `display_name`, `password_hash`, `is_admin`, `active`, `must_change_password`, `session_version`, timestamps. The owner is **not** in this table. |
+| `user_access` | `(user_id, project, level)` with level `read` / `write` / `manage`. |
+| `user_views` | Each person's saved table columns and widths per portal (`user_id` 0 = owner). |
+| `activity_log` | Audit trail: deletes and user changes. |
+| `ingest_log`, `login_failures` | Rate-limit bookkeeping (kept small; old rows are pruned). |
 
-## How ingest works
+**When you add a table or column:** add the idempotent statement to `SCHEMA` in `lib/db.ts` **and** extend the
+"already migrated?" check at the top of `migrate()` (otherwise an existing database that passes the old check
+will never receive the change).
 
-`POST /api/ingest/{2w|4w|roadshield}` with header `x-hub-key` and either
-`{ "headers": [...], "values": [...] }` or `{ "fields": { "<header>": "<value>" } }`,
-plus optional `submittedAt` (ISO time) and `flagged` (header names to highlight).
+**Connection handling:** one `pg` Pool, `max: 3`, reused across warm invocations and hot reloads
+(`globalThis.__hubPool`). Neon's compute can be asleep, and the first query may take a moment.
 
-- Identical resubmissions are stored once (fingerprint of headers + values).
-- Columns are never fixed. A form can add or reword questions, and the Excel export lines
-  everything up by header name.
-- Browser posts (only if `INGEST_ORIGINS_*` is set) are rate-limited per IP.
+**Size:** a record is the full set of answers (4W has ~72 columns), plus a copy as search text, so budget on the
+order of **10–20 KB per record**. At about 1,000–1,500 entries a year that is nowhere near the free plan's
+storage. The Overview shows a storage meter for admins. Check Neon's current plan limits and its restore
+history options in the Neon console, since those change; **Excel export is the manual backup.**
 
-## People, access and roles
+**Deleting data** is permanent (no soft delete). Notes go with their record.
 
-Everyone signs in with a username and password. Two kinds of account:
+## 7. The ingest API
 
-- **Owner**: the `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` login from the Vercel settings. Always an admin, can't be
-  disabled or edited from the app, so a mistake in the People page can never lock everyone out.
-- **People**: added by an admin on **People & access**. Nothing to configure; the tables create themselves.
+`POST /api/ingest/{2w|4w|roadshield}` with `Content-Type: application/json` and header `x-hub-key: <that project's key>`.
 
-Access is set per person, per portal (2W, 4W, RoadShield):
+Body is **either**:
+```json
+{ "headers": ["Name", "HQ", "Vehicle 3. Are the headlights…?"], "values": ["Asha", "Hyd", "No"],
+  "submittedAt": "2026-10-16T09:12:00Z", "flagged": ["Vehicle 3. Are the headlights…?"] }
+```
+**or** a flat object (what 2W sends): `{ "fields": { "Name": "Asha", "HQ": "Hyd" } }`.
+
+- `submittedAt` (optional): when the form was completed (matters for entries held offline and sent later;
+  accepted if within 5 minutes in the future or 60 days in the past, else `received_at` is used).
+- `flagged` (optional): headings to show in red and count as "needs follow-up". Names that aren't headings are dropped.
+- Limits: ≤ 300 columns, headings ≤ 300 chars, values ≤ 5,000 chars (truncated), body ≤ 200 KB. Repeated headings
+  are made unique (`Name`, `Name (2)`).
+- The `title` shown in lists comes from the column named in `titleColumn` in `lib/projects.ts` (currently `Name`).
+
+Responses: `201 {ok:true,id}` stored · `200 {ok:true,duplicate:true}` identical entry already stored · `400` bad
+body · `401` wrong/missing key · `404` unknown project · `413` too large · `429` browser rate limit · `500` database problem.
+
+Auth: the key is compared in constant time against `INGEST_KEY_*` and must be ≥ 24 chars. The optional browser path
+(`INGEST_ORIGINS_*`) allows CORS only from the listed origins and limits each IP to 30 per hour.
+
+Try it:
+```bash
+curl -X POST https://submissions-hub.vercel.app/api/ingest/4w \
+  -H "x-hub-key: $INGEST_KEY_4W" -H "content-type: application/json" \
+  -d '{"headers":["Name","HQ"],"values":["TEST - delete me","Hyd"]}'
+```
+Then delete the test row in the admin.
+
+## 8. People, access and security
+
+Two kinds of account:
+- **Owner**: `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` from the environment. Always an admin. Not stored in the
+  database, so it can't be disabled, deleted or locked out by a mistake in the People page. Its password is changed
+  by generating a new hash (`npm run hash-password`) and updating the Vercel variable.
+- **People**: created by an admin on **People & access**. Passwords are scrypt-hashed.
+
+Access is per person, per portal:
 
 | Level | Can |
 |---|---|
-| **Viewer** | open, search and export records |
-| **Contributor** | + add notes and highlight records |
-| **Manager** | + delete records |
-| *no access* | the portal doesn't appear, and its addresses answer "not found" |
+| **Viewer** (`read`) | open, search, sort, export |
+| **Contributor** (`write`) | + add notes, highlight records |
+| **Manager** (`manage`) | + delete records |
+| *no access* | portal is absent from the menu and its addresses return **404** |
+| **Admin** | Manager on every portal, plus people and the activity log |
 
-An **admin** is a Manager on every portal and also manages people and sees the **Activity log** (deletes and user changes).
+How it is enforced (all in code, not just hidden buttons):
+- **Sessions:** a signed `httpOnly` cookie (`hub_session`) holding `{id, username, session version, expiry}`.
+  Access is looked up fresh on **every request**, so removing access, disabling a person or resetting a
+  password takes effect on their next click. Disabling, deleting or resetting a password bumps `session_version`,
+  which invalidates their cookies.
+- **Pages:** route-group layouts do the checks *above* the loading skeletons so refusals are real HTTP 404s and
+  nothing from a forbidden portal is ever queried: `(admin)/(app)/layout.tsx` (signed in + password current),
+  `(app)/(admin-only)/layout.tsx` (admins), `(app)/p/[project]/layout.tsx` (access to that portal). Pages also
+  re-check (defence in depth).
+- **Actions and export:** every server action goes through `lib/access.ts` (`authorise`, `authoriseAdmin`);
+  the Excel route checks read access itself. Server actions are public web endpoints; never trust the UI.
+- **Rules:** admins can't disable, demote or delete *themselves* or reset their own password from People (they use
+  Account); usernames are 3–32 chars `a-z 0-9 . _ -`, can't equal the owner's, are case-insensitive unique;
+  passwords ≥ 10 characters; a generated password (`xxxx-xxxx-xxxx`) is shown **once** and the person must set
+  their own at first sign-in (every page redirects to Account until they do).
+- **Brute force:** 8 failed sign-ins (or wrong current-password attempts) from one IP lock it for 15 minutes.
+  Unknown usernames still run a password hash so timing doesn't reveal which exist.
+- **Secrets:** never in git. `ADMIN_PASSWORD_HASH` is a hash, not the password.
 
-How it behaves:
+## 9. What the admin does
 
-- A new person gets a generated password, shown **once** to the admin to pass on. They must choose their own at first sign-in.
-  Admins can reset a password, disable a person (their notes stay) or delete them.
-- Changes apply immediately: removing access, disabling, or resetting a password ends the person's open sessions on their next click.
-- Every check runs on the server (pages, Excel export and every action), not just in the buttons, and portal/admin pages
-  are checked in layouts above the loading skeleton so the response is a real 404.
-- The owner password is changed in Vercel; everyone else changes theirs on **Account**.
-- Deploying this version signs everyone out once (the session cookie changed). Sign in again.
+- **Overview:** per-portal totals, last 30 days, flagged counts, highlighted counts, latest entries; storage meter (admins).
+- **A portal's table** (`/p/{project}`): search every answer **and note text**, date range (India time), filter by
+  highlight colour and "With notes", 50 per page.
+  - **Your own columns:** a *Columns* side panel lists every field the form has collected. Search, click to add,
+    drag/arrows to reorder, "Add N flagged columns" for questions answered wrongly on the page, *Default* to reset.
+    Saved per person per portal in `user_views`, so it follows them across devices. Defaults come from `listColumns`
+    in `lib/projects.ts`.
+  - **Spreadsheet feel:** scrolls sideways and down with the checkbox + Received columns and heading row frozen,
+    edge shadows, drag a column edge to resize (double-click resets), click a heading to sort server-side across
+    all pages (numbers numerically; asc → desc → clear). Flagged answers are red in the grid; flag and note counts
+    and the highlight dot sit in the frozen Received cell; clicking a row opens it.
+- **A record** (`/p/{project}/{id}`): all answers (remarks folded under questions), flagged answers in red, a
+  highlight picker, notes (newest first; author or a Manager can delete), prev/next.
+- **Highlights:** five colours with meanings (`lib/marks.ts`: Needs action, Follow up, Done / OK, For info, Escalated),
+  set per record, on ticked rows, or on everything a filter matches. Tinted in the list and kept in Excel.
+- **Delete (Manager):** tick rows or "Select all N" across pages; confirm; bulk "all matching" requires typing `DELETE`.
+  Logged in the activity log.
+- **Export to Excel:** current filters (or one record). Includes **all** columns (not just the ones on screen),
+  highlight + who set it, notes, row colours, flagged cells in red.
+- **People & access / Activity log** (admins), **Account** (everyone: change own password).
+- **Navigation feel:** progress bar on every click, skeleton screens, spinners; the left menu collapses to an
+  icon rail (button beside the logo, or `[`), remembered in the `hub_sidebar` cookie that the server reads.
 
-### Highlights and notes
+## 10. Code map
 
-The replacement for colouring rows in Excel. **Contributors and above** can:
+```
+app/
+  login/                         sign-in page
+  (admin)/layout.tsx             the shell: menu, account, sign out (allows the must-change-password case)
+  (admin)/account/               change own password
+  (admin)/(app)/layout.tsx       gate: signed in AND password up to date
+  (admin)/(app)/(home)/          Overview (own loading skeleton, so it doesn't wrap other routes)
+  (admin)/(app)/p/[project]/     layout (access gate) · page (table) · [id]/ (record) · loading skeletons
+  (admin)/(app)/(admin-only)/    layout (admins only) · users/ · activity/
+  api/ingest/[project]/          how projects send data in (key auth)
+  api/export/[project]/          Excel export (session + read access)
+  api/health/                    setup check
+  actions.ts                     login, logout, delete records
+  record-actions.ts              highlight, notes
+  user-actions.ts                create/edit/reset/delete people, change own password
+  view-actions.ts                save/reset a person's table layout
+components/                      SubmissionsTable (grid), ColumnPicker, NotesPanel, MarkPicker, UsersManager,
+                                 FilterBar, ConfirmDialog, Modal, AppShell/SidebarToggle, NavProgress/NavFade, skeletons…
+lib/
+  db.ts                          Pool, query(), transaction(), SCHEMA + migrate()
+  auth.ts                        sessions, getCurrentUser, requireUser/Admin/ProjectAccess
+  access.ts                      authorise() for server actions
+  permissions.ts                 levels and can()/levelFor()/visibleProjects() (safe for browser and server)
+  projects.ts                    the portals (id, name, key env var, default columns): add a project here
+  submissions.ts                 all record queries: list/sort/filter, marks, notes, delete, stats
+  users.ts · password.ts         people and scrypt/password helpers
+  views.ts                       saved columns, available columns
+  marks.ts · format.ts · sidebar.ts · nav-state.ts · activity.ts · utils.ts
+scripts/                         generate-secrets.mjs · hash-password.mjs
+```
 
-- **Highlight** a record in one of five colours (Needs action, Follow up, Done / OK, For info, Escalated): from the record page, or tick
-  rows (or "Select all N" across pages) and pick a colour. The row is tinted in the list, and the Excel export keeps the row colour.
-- Add **notes** to a record (newest first, with author and time; authors and Managers can delete). Notes are searchable and the export includes them.
-- Filter the list by highlight colour and by "With notes".
+## 11. Runbook: everyday jobs
 
-Colours and meanings live in `lib/marks.ts`; levels in `lib/permissions.ts`; portals in `lib/projects.ts`.
+| Job | How |
+|---|---|
+| Add a person | Sign in as owner/admin → People & access → Add person → pick access per portal → copy the one-time password to them |
+| Change someone's access | People & access → pencil. Takes effect on their next click |
+| Someone forgot their password | People & access → key icon → give them the new one-time password |
+| Someone left | Edit → untick "Account active" (keeps their notes), or delete them |
+| Change the owner password | `npm run hash-password` → update `ADMIN_PASSWORD_HASH` in Vercel → redeploy |
+| Sign everyone out | Change `SESSION_SECRET` in Vercel → redeploy |
+| Rotate a project's key | Section 4 |
+| Add a fourth portal | Add an entry to `PROJECTS` in `lib/projects.ts` (id, name, accent, `keyEnv`, `titleColumn`, `listColumns`); add the `INGEST_KEY_*` variable; add `HUB_INGEST_URL`/`KEY` to that project and send to `/api/ingest/<id>`. People's access matrix picks it up automatically. |
+| Change the highlight colours/meanings | `lib/marks.ts` (ids are stored in the database; renaming an id orphans existing marks, so change labels/colours only) |
+| Clear test entries | Portal table → tick → Delete (Manager+) |
+| Free up space | Export to Excel first, then delete old entries; watch the Overview meter |
+| Upgrade dependencies | `npm audit --omit=dev`; Next.js was moved to 16.4.1 for security fixes. Keep `pg` and `exceljs` in `serverExternalPackages` (`next.config.ts`) |
 
-## Admin
+## 12. Troubleshooting
 
-- **Overview:** totals, last 30 days and flagged counts per form, plus the latest entries.
-- **Per form:** search across every answer, a date range (India time), and pages of 50.
-- **Collapsible menu:** the left menu folds into a slim icon rail (button beside the logo, or press `[`) to give wide tables
-  the room; it's remembered on that browser and phones always use the top bar.
-- **Your own columns:** the table starts with a few key columns, but each form collects dozens. **Columns** opens a side panel
-  listing every field: search it, add with a click, drag to reorder, or press **Add N flagged columns** to pull in just the
-  questions someone got wrong on the page you're viewing. Your layout (columns, order and widths) is saved on the server per
-  person and per portal, so it follows you to any device; **Default** puts it back.
-- **Spreadsheet feel:** the grid scrolls sideways and down with the checkbox and Received columns and the heading row frozen,
-  edge shadows when there's more to see, drag a column edge to resize (double-click to reset), click a heading to sort
-  (numbers sort as numbers; click again to reverse, a third time to clear; it sorts across every page). Flagged answers show
-  in red inside the grid, and the flag and note counts sit in the frozen Received column. Click anywhere on a row to open it.
-- **Detail:** every field, remarks under their question, flagged answers in red.
-- **Export to Excel:** the current filter, or a single submission.
-- **Delete (permanent):** tick rows and press **Delete**, or use the Delete button on a submission.
-  Tick the header box to select the whole page; when more entries match, **Select all N** extends
-  the choice across every page of the current search/date filter. Everything asks for confirmation,
-  and deleting all matches makes you type `DELETE`. There is no undo, so export to Excel first if
-  you might need the data. Deletes re-check the login on the server.
-- **Loading feedback:** a progress bar runs along the top the moment you click anything, the sidebar item you
-  clicked shows a spinner, every page has a skeleton screen, searching and paging dim the table, and Apply, Export and
-  Sign out show their own spinners. (`app/**/loading.tsx`, `components/NavProgress.tsx`, `lib/nav-state.ts`)
-- **Storage meter** (Overview): database size against `STORAGE_LIMIT_MB` (default 1024), so you know when to clear old entries.
+| Symptom | Likely cause → fix |
+|---|---|
+| `/api/health` shows `database:false` | `DATABASE_URL` missing/wrong, or Neon not connected to this project/environment → Vercel → Storage; redeploy |
+| `/api/health` shows `adminLogin:false` | One of `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` (≥32) missing → add, redeploy |
+| Changed a variable and nothing changed | Variables only apply to **new** deployments → Deployments → Redeploy |
+| A project's entries don't appear in the hub | That project is missing `HUB_INGEST_URL`/`HUB_INGEST_KEY`, wrong portal in the URL, or key mismatch (401). Check that project's function logs ("Hub response not ok") and redeploy it |
+| Ingest returns 401 | Key doesn't equal the hub's `INGEST_KEY_*` for that portal (also: key < 24 chars is rejected) |
+| Ingest returns `{"duplicate":true}` | Identical headings + values were already stored (by design) |
+| Site says "Submissions are not configured yet" (4W) | The project has neither Sheet, Brevo nor hub configured → set at least one |
+| "Too many attempts" on sign-in | 8 failures from that IP in 15 minutes; wait, or it clears on a successful sign-in |
+| Everyone got signed out | `SESSION_SECRET` changed, or the deploy that introduced multi-user changed the cookie format (one-time) |
+| Someone sees "page not found" on a portal | They have no access to it → People & access. (404 is intentional for no access) |
+| First page after a quiet spell is slow | Neon compute waking up; subsequent requests are fast |
+| Sidebar counts missing | Person still has a temporary password → they must set their own on Account |
+| Layout of columns looks wrong for one person | Their saved layout: Columns panel → **Default** |
+| (Local testing) page stuck on a skeleton / won't hydrate | A *hidden* browser tab never runs `requestAnimationFrame`, so React never reveals streamed content. Make the tab visible (see section 13) |
+| (Local) infinite reload loop in dev | Restarting `next dev` while a tab is open can leave the dev HMR client reloading; close the tab, restart the server, reopen |
 
-Login: 8 failed attempts from one IP lock it out for 15 minutes.
+## 13. Developing and testing
 
-## Adding a project
+Commands: `npm run dev` (port 3400) · `npm run build` · `npm run lint` · `npx tsc --noEmit` · `npm run secrets` ·
+`npm run hash-password`.
 
-Add an entry to `lib/projects.ts` and an `INGEST_KEY_*` variable, then send to
-`/api/ingest/<id>` from that project's server.
+**Test approach used** (the scripts themselves are not committed; recreate if needed): a local Postgres
+(`submissions_hub_dev`), the dev server on 3400, then a script that
+1. seeds records through the real `/api/ingest/*` endpoints (including a wide 4W record with every real heading);
+2. mints the **same signed session cookie the app issues** using `SESSION_SECRET` (`{i,u,v,exp}`, HMAC-SHA256,
+   base64url) for people it creates through the real `createUserAction`;
+3. discovers server-action ids from the dev client bundles and calls every action directly with and without a
+   valid session, as each role, to prove refusals (a button being hidden is not security);
+4. checks pages return the right HTTP status per role (404 for no access, redirects when signed out or when a
+   password change is pending) and that nothing from another portal leaks;
+5. checks disabled/reset/deleted people and tampered, expired, old-format or wrong-user cookies are refused;
+6. checks highlights, notes (including note search, author-only delete), bulk operations, deletes cascade, saved
+   layouts are per person and cleaned (widths clamped, junk dropped, ≤ 300 columns), and sort values with SQL
+   injection strings are harmless.
+That suite had 125 checks, all passing at the last release. UI behaviour (loaders, column panel, resize, sort,
+sticky columns, collapsible menu, phone layout) was checked in a real browser, including at 375 px width.
+
+**Gotchas when working on this code:**
+- **A server component can't read a value exported from a `"use client"` file.** It gets a placeholder object,
+  not the string. This caused the sidebar cookie to be ignored on the server until the name moved to `lib/sidebar.ts`.
+  Keep shared constants in plain modules.
+- **Next.js 16:** `params` and `searchParams` are Promises; `cookies()` and `headers()` are async.
+- **`server-only`** is imported by `db.ts`, `auth.ts`, `users.ts`, `submissions.ts`, etc.: they can't be imported
+  into client components. `lib/permissions.ts`, `lib/marks.ts`, `lib/format.ts`, `lib/nav-state.ts` are browser-safe.
+- **Streaming status codes:** a `loading.tsx` boundary makes the response start before the page decides to
+  `notFound()`/`redirect()`, returning HTTP 200 with a not-found screen. Access checks therefore live in layouts
+  *above* the skeletons. A record id that doesn't exist (or belongs to another portal) still returns the not-found
+  screen with status 200 on purpose, to keep the skeleton; no data is returned.
+- **State updated inside a React transition is deferred** until the transition finishes (this made the progress
+  bar not start for searches). `startNav()` is called before `startTransition`.
+- **Testing in a hidden browser pane:** CSS transitions and `requestAnimationFrame` don't run, React's reveal of
+  streamed content waits on rAF. Bring the pane to the front or take a screenshot to force a frame.
+- **Server action ids differ in production builds**; the dev-bundle discovery trick above only works with `next dev`.
+- Don't run `next build` while `next dev` is running in the same folder (they share `.next`).
+- `AGENTS.md` is regenerated by `next dev` and is git-ignored.
+
+## 14. Decisions, gotchas and known limits
+
+- **Additive, not a replacement, on purpose.** The projects still write to their Sheets and send email, so the hub is
+  a safe extra layer and a fallback exists if the hub is down.
+- **Highlights and notes instead of Excel colouring.** The team coloured rows by hand; five meaningful colours plus notes
+  cover that, and they survive in the Excel export.
+- **"Edit" in the original request was interpreted as notes/highlights (Contributor) and delete (Manager).** Submitted
+  answers are immutable: an untouched record is the point. Editing values with a visible history would be a deliberate
+  addition.
+- **Column layouts are personal.** There is no admin-set team default per portal (easy to add).
+- **Excel export always includes every column**, regardless of the columns shown on screen.
+- **No email from the hub** (no password-reset emails, no alerts). Admins hand out one-time passwords. A shared
+  Brevo key for all projects was planned.
+- **Hard deletes**, no recycle bin. The activity log records who deleted how many (not what).
+- **Vercel's free (Hobby) plan is intended for non-commercial use.** These are client projects; the account may need
+  to move to a paid plan, or the apps to another host, depending on how that plays out. The same applies to the
+  other projects on Vercel.
+- **Neon free-tier limits change.** Check the current limits when sizing.
+- Everything shows **India time** (`Asia/Kolkata`); dates in filters are IST calendar days.
+
+## 15. Related projects and history
+
+| Project | Repo | Notes |
+|---|---|---|
+| 2W Ride Along | `akhilkashetty1/rideAlong2w` | **Migrated** from Create React App + Render Express to one Next.js app on Vercel. Domain `ride-along-form.in` (DNS at GoDaddy) points to Vercel (apex A record + `www` CNAME). Backend route replaces the old `rideAlongBackend`. |
+| 4W Ride Along | `akhilkashetty1/rideAlong4w` | Four-wheeler version; same architecture as RoadShield; 3D walkaround, offline outbox. |
+| RoadShield | `akhilkashetty1/roadshield1` | Marketing site; contact form posts here too. `main` is deployed; feature work happens on branches. |
+| (retired) | `rideAlongProject/ride-along-form` (CRA + `gh-pages`), `rideAlongProject/rideAlongBackend` (Express on Render) | Old 2W stack. Keep archived. The old Brevo key committed in `rideAlongBackend`'s history **must stay revoked**. |
+
+Timeline in short: hub built → added to Vercel with Neon → 2W moved off Render to Vercel (domain switched) → 3 projects
+connected → multi-user access, highlights and notes → spreadsheet-style table with chosen columns → collapsible menu.
+Google Sheets and Brevo email remain as parallel channels in each project.
