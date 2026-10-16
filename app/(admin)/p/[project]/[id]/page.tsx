@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth";
 import { getProject } from "@/lib/projects";
 import { formatIST, getSubmission } from "@/lib/submissions";
 import { cn } from "@/lib/utils";
+import DeleteSubmissionButton from "@/components/DeleteSubmissionButton";
 
 type Props = { params: Promise<{ project: string; id: string }> };
 
@@ -66,12 +67,15 @@ export default async function SubmissionPage({ params }: Props) {
               )}
             </p>
           </div>
-          <a
-            href={`/api/export/${project.id}?id=${s.id}`}
-            className="flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium hover:border-ink"
-          >
-            <Download className="h-4 w-4" /> Excel
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/api/export/${project.id}?id=${s.id}`}
+              className="flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium hover:border-ink"
+            >
+              <Download className="h-4 w-4" /> Excel
+            </a>
+            <DeleteSubmissionButton projectId={project.id} id={s.id} title={s.title} />
+          </div>
         </div>
         {s.flagged.length > 0 && (
           <div className="mt-4 rounded-xl bg-flag-wash p-3.5">

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ChevronLeft, ChevronRight, Download, Search, TriangleAlert, X } from "lucide-react";
+import { notFound, redirect } from "next/navigation";
+import { ChevronLeft, ChevronRight, Download, Search, X } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { getProject } from "@/lib/projects";
 import { field, formatIST, listSubmissions } from "@/lib/submissions";
+import SubmissionsTable from "@/components/SubmissionsTable";
 
 const PAGE_SIZE = 50;
 
@@ -27,6 +28,8 @@ export default async function ProjectPage({ params, searchParams }: Props) {
   const page = Math.max(1, Number(sp.page) || 1);
   const { rows, total } = await listSubmissions(project.id, filters, page, PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // After deleting the last rows of the last page, land on the new last page instead of an empty one.
+  if (page > pages) redirect(`/p/${project.id}${pages > 1 ? `?${new URLSearchParams({ ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), page: String(pages) })}` : ""}`);
   const filtered = Boolean(filters.q || filters.from || filters.to);
 
   const qs = (extra: Record<string, string | number>) => {
@@ -87,55 +90,28 @@ export default async function ProjectPage({ params, searchParams }: Props) {
         )}
       </form>
 
-      <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
-        {rows.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-paper-2 text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Received</th>
-                  {project.listColumns.map((c) => (
-                    <th key={c} className="whitespace-nowrap px-4 py-3 font-medium">
-                      {c}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 font-medium">Flags</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {rows.map((r) => (
-                  <tr key={r.id} className="group relative hover:bg-paper-2">
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">
-                      {/* The link covers the whole row */}
-                      <Link href={`/p/${project.id}/${r.id}`} className="after:absolute after:inset-0">
-                        {formatIST(r.received_at)}
-                      </Link>
-                    </td>
-                    {project.listColumns.map((c, i) => (
-                      <td key={c} className={`max-w-[16rem] truncate px-4 py-3 ${i === 0 ? "font-medium" : ""}`}>
-                        {field(r, c) || <span className="text-muted">—</span>}
-                      </td>
-                    ))}
-                    <td className="px-4 py-3">
-                      {r.flagged.length ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-flag-wash px-2 py-0.5 text-xs font-semibold text-flag">
-                          <TriangleAlert className="h-3 w-3" /> {r.flagged.length}
-                        </span>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="px-5 py-14 text-center text-sm text-muted">
-            {filtered ? "Nothing matches these filters." : "No submissions yet for this form."}
-          </p>
-        )}
-      </div>
+      {rows.length ? (
+        // Keyed so ticked rows reset when you change page or filters.
+        <SubmissionsTable
+          key={`${page}|${filters.q}|${filters.from}|${filters.to}`}
+          projectId={project.id}
+          projectShort={project.short}
+          columns={project.listColumns}
+          rows={rows.map((r) => ({
+            id: r.id,
+            received: formatIST(r.received_at),
+            cells: project.listColumns.map((c) => field(r, c)),
+            flags: r.flagged.length,
+          }))}
+          total={total}
+          filters={filters}
+          filtered={filtered}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
+          <p className="px-5 py-14 text-center text-sm text-muted">{filtered ? "Nothing matches these filters." : "No submissions yet for this form."}</p>
+        </div>
+      )}
 
       {pages > 1 && (
         <nav className="flex items-center justify-between text-sm" aria-label="Pages">

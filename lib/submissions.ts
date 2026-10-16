@@ -146,6 +146,32 @@ export async function getSubmission(project: string, id: string) {
   return row ?? null;
 }
 
+/* ------------------------------------------------------------ deleting */
+
+/** Permanently deletes these submissions (hard delete) from one project. Returns how many were removed. */
+export async function deleteByIds(project: string, ids: string[]) {
+  const clean = [...new Set(ids)].filter((i) => /^\d{1,18}$/.test(i)).slice(0, 1000);
+  if (!clean.length) return 0;
+  const [r] = await query<{ n: number }>(
+    `with d as (delete from submissions where project = $1 and id = any($2::bigint[]) returning 1) select count(*)::int as n from d`,
+    [project, clean],
+  );
+  return r.n;
+}
+
+/** Permanently deletes everything in a project that matches the current search/date filters. */
+export async function deleteMatching(project: string, f: Filters) {
+  const w = where(project, f);
+  const [r] = await query<{ n: number }>(`with d as (delete from submissions where ${w.sql} returning 1) select count(*)::int as n from d`, w.params);
+  return r.n;
+}
+
+/** Bytes the database currently uses (what counts against the free plan's storage). */
+export async function storageUsage() {
+  const [r] = await query<{ bytes: string }>(`select pg_database_size(current_database())::text as bytes`);
+  return Number(r.bytes);
+}
+
 export async function projectStats() {
   const rows = await query<{ project: string; total: string; last30: string; flagged: string; latest: Date | null }>(
     `select project,

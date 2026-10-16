@@ -2,11 +2,15 @@ import Link from "next/link";
 import { ArrowRight, TriangleAlert } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { PROJECTS, getProject } from "@/lib/projects";
-import { formatIST, projectStats, recentSubmissions } from "@/lib/submissions";
+import { formatIST, projectStats, recentSubmissions, storageUsage } from "@/lib/submissions";
 
 export default async function Overview() {
   await requireSession();
-  const [stats, recent] = await Promise.all([projectStats(), recentSubmissions(10)]);
+  const [stats, recent, used] = await Promise.all([projectStats(), recentSubmissions(10), storageUsage().catch(() => null)]);
+  // The database plan's storage limit (Neon free tier), so the meter shows how much room is left.
+  const limitMb = Number(process.env.STORAGE_LIMIT_MB) || 1024;
+  const usedMb = used == null ? null : used / 1_048_576;
+  const pct = usedMb == null ? 0 : Math.min(100, (usedMb / limitMb) * 100);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -42,6 +46,22 @@ export default async function Overview() {
           );
         })}
       </section>
+
+      {usedMb != null && (
+        <section className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold">Database storage</h2>
+            <p className="text-sm text-muted">
+              <span className="font-semibold tabular-nums text-ink">{usedMb < 10 ? usedMb.toFixed(1) : Math.round(usedMb)} MB</span> of{" "}
+              {limitMb >= 1024 ? `${+(limitMb / 1024).toFixed(1)} GB` : `${limitMb} MB`} used
+            </p>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-paper-2" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Database storage used">
+            <div className={`h-full rounded-full ${pct > 85 ? "bg-flag" : pct > 60 ? "bg-amber-500" : "bg-ok"}`} style={{ width: `${Math.max(pct, 0.5)}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted">Free up room by deleting old entries from a form&rsquo;s page: tick them and press Delete.</p>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-line bg-paper shadow-sm">
         <h2 className="border-b border-line px-5 py-3.5 font-semibold">Latest submissions</h2>
