@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, CheckCircle2, Columns3, MessageSquare, MoreHorizontal, Trash2, TriangleAlert, X } from "lucide-react";
 import { deleteAllMatching, deleteSubmissions } from "@/app/actions";
 import { resetViewAction, saveViewAction } from "@/app/view-actions";
@@ -10,6 +11,7 @@ import ColumnPicker, { type SaveState } from "@/components/ColumnPicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import MarkPicker from "@/components/MarkPicker";
 import QuickActions, { type QuickTarget } from "@/components/QuickActions";
+import { FocusButton, useFocusMode } from "@/components/TableWorkspace";
 import { markById } from "@/lib/marks";
 import { startNav } from "@/lib/nav-state";
 import { cn } from "@/lib/utils";
@@ -92,6 +94,7 @@ export default function SubmissionsTable({
   canManage: boolean;
 }) {
   const router = useRouter();
+  const { focus, slot } = useFocusMode();
 
   // ---- selection and delete
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -330,24 +333,30 @@ export default function SubmissionsTable({
   const quickRow = quick ? byId.get(quick.rowId) : undefined;
 
   const scope = filtered ? "matching your filters" : `in ${projectShort}`;
+  const columnsButton = (
+    <button type="button" onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen} className={cn("btn btn-sm", pickerOpen ? "btn-primary" : "btn-secondary")}>
+      <Columns3 className="h-3.5 w-3.5" /> <span className={cn(focus && "hidden sm:inline")}>Columns</span>
+      <span className={cn("rounded-full px-1.5 py-0.5 text-[0.6875rem] tabular-nums leading-none", pickerOpen ? "bg-white/15" : "bg-paper-2 text-ink-soft ring-1 ring-line")}>{columns.length}</span>
+    </button>
+  );
   const th = "border-b border-r border-line border-r-line-soft bg-[#fafafa] px-3 py-2 text-left align-bottom text-xs font-medium leading-tight text-muted";
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setPickerOpen((o) => !o)}
-          aria-expanded={pickerOpen}
-          className={cn("btn btn-sm", pickerOpen ? "btn-primary" : "btn-secondary")}
-        >
-          <Columns3 className="h-3.5 w-3.5" /> Columns
-          <span className={cn("rounded-full px-1.5 py-0.5 text-[0.6875rem] tabular-nums leading-none", pickerOpen ? "bg-white/15" : "bg-paper-2 text-ink-soft ring-1 ring-line")}>{columns.length}</span>
-        </button>
-        <p className="hidden text-xs text-faint sm:block">
-          {canWrite ? "Select text to highlight or add a note · right-click a row · " : ""}drag a column edge to resize · click a heading to sort
-        </p>
-      </div>
+      {focus ? (
+        // In focus mode the Columns button lives in the command bar at the top.
+        slot && createPortal(columnsButton, slot)
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            {columnsButton}
+            <FocusButton />
+          </span>
+          <p className="hidden text-xs text-faint sm:block">
+            {canWrite ? "Select text to highlight or add a note · right-click a row · " : ""}drag a column edge to resize · click a heading to sort
+          </p>
+        </div>
+      )}
 
       {notice && (
         <p role="status" className="pop-in mb-3 flex items-center gap-2 rounded-lg bg-[#effaf3] px-3.5 py-2.5 text-[0.8125rem] font-medium text-ok ring-1 ring-[#cdebd8]">
@@ -376,8 +385,8 @@ export default function SubmissionsTable({
         </p>
       )}
 
-      <div className="card relative overflow-hidden" style={{ "--sticky": `${stickyLeft}px` } as React.CSSProperties}>
-        <div ref={scroller} onMouseUp={onSelectEnd} onKeyUp={(e) => e.shiftKey && onSelectEnd()} className="max-h-[72dvh] overflow-auto overscroll-x-contain" tabIndex={0} aria-label="Submissions table, scrollable">
+      <div className={cn("card relative overflow-hidden", focus && "flex min-h-0 flex-1 flex-col")} style={{ "--sticky": `${stickyLeft}px` } as React.CSSProperties}>
+        <div ref={scroller} onMouseUp={onSelectEnd} onKeyUp={(e) => e.shiftKey && onSelectEnd()} className={cn("overflow-auto overscroll-x-contain", focus ? "min-h-0 flex-1" : "max-h-[72dvh]")} tabIndex={0} aria-label="Submissions table, scrollable">
           <table ref={tableRef} className="border-separate border-spacing-0 text-sm" style={{ width: tableWidth, minWidth: "100%", tableLayout: "fixed" }}>
             <colgroup>
               {selectable && <col style={{ width: CHECK_W }} />}

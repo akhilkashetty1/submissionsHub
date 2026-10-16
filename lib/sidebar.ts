@@ -5,3 +5,6 @@
  * "use client" file gets a placeholder, not the value.
  */
 export const SIDEBAR_COOKIE = "hub_sidebar_session";
+
+/** Remembers that the table is in focus (full-screen) mode until the browser is closed, so the server renders it straight away. */
+export const FOCUS_COOKIE = "hub_focus_session";

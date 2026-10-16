@@ -150,3 +150,8 @@ dialog::backdrop { background: rgb(12 13 16 / 0.45); backdrop-filter: blur(3px);
   .nav-crawl { animation: none; width: 70%; }
   .pop-in, .slide-in, dialog[open] { animation: none; }
 }
+
+/* Focus mode fades in (opacity only: a transform would trap the fixed popovers inside it) */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fadeIn 0.15s ease-out; }
+@media (prefers-reduced-motion: reduce) { .fade-in { animation: none; } }

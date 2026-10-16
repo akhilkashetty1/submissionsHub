@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronLeft, ChevronRight, Inbox, SearchX } from "lucide-react";
@@ -12,6 +13,8 @@ import FilterBar from "@/components/FilterBar";
 import ExportButton from "@/components/ExportButton";
 import PortalIcon from "@/components/PortalIcon";
 import NavFade from "@/components/NavFade";
+import TableWorkspace from "@/components/TableWorkspace";
+import { FOCUS_COOKIE } from "@/lib/sidebar";
 import { MARKS } from "@/lib/marks";
 
 const PAGE_SIZE = 50;
@@ -65,6 +68,8 @@ export default async function ProjectPage({ params, searchParams }: Props) {
   const canWrite = can(user, project.id, "write");
   const canManage = can(user, project.id, "manage");
   const initialColumns = view.columns ?? project.listColumns;
+  const initialFocus = (await cookies()).get(FOCUS_COOKIE)?.value === "1";
+  const exportHref = `/api/export/${project.id}${filterQuery ? `?${filterQuery}` : ""}`;
 
   return (
     <div className="mx-auto max-w-[96rem] space-y-5">
@@ -86,84 +91,99 @@ export default async function ProjectPage({ params, searchParams }: Props) {
           </div>
         </div>
         <ExportButton
-          href={`/api/export/${project.id}${filterQuery ? `?${filterQuery}` : ""}`}
+          href={exportHref}
           label={`Export to Excel${filtered ? " (filtered)" : ""}`}
           className="btn btn-secondary"
         />
       </header>
 
-      <FilterBar
-        projectId={project.id}
-        q={filters.q}
-        from={filters.from}
-        to={filters.to}
-        mark={filters.mark}
-        notes={filters.notes}
-        sort={sort?.col ?? ""}
-        dir={sort?.dir ?? ""}
-        filtered={filtered}
-      />
-
-      <NavFade className="space-y-4">
-        {rows.length ? (
-          // Keyed so ticked rows reset when you change page, filters or sort.
-          <SubmissionsTable
-            key={`${page}|${filterQuery}|${sort?.col ?? ""}|${sort?.dir ?? ""}`}
+      <TableWorkspace
+        initialFocus={initialFocus}
+        project={{ id: project.id, name: project.name, accent: project.accent }}
+        total={total}
+        filters={filters}
+        pager={{
+          from: total ? (page - 1) * PAGE_SIZE + 1 : 0,
+          to: Math.min(page * PAGE_SIZE, total),
+          newerHref: page > 1 ? `/p/${project.id}${withSort({ page: page - 1 })}` : null,
+          olderHref: page < pages ? `/p/${project.id}${withSort({ page: page + 1 })}` : null,
+        }}
+        exportHref={exportHref}
+        filterBar={
+          <FilterBar
             projectId={project.id}
-            projectShort={project.short}
-            titleColumn={project.titleColumn}
-            available={available}
-            defaults={project.listColumns}
-            initialColumns={initialColumns}
-            initialWidths={view.widths}
-            rows={rows.map((r) => ({
-              id: r.id,
-              received: formatIST(r.received_at),
-              mark: r.mark,
-              notes: r.note_count,
-              flags: r.flagged.length,
-              data: Object.fromEntries(r.headers.map((h, i) => [h, (r.values[i] ?? "").slice(0, CELL_MAX)])),
-              flaggedCols: r.flagged,
-              cellMarks: r.cell_marks,
-            }))}
-            total={total}
-            filters={filters}
+            q={filters.q}
+            from={filters.from}
+            to={filters.to}
+            mark={filters.mark}
+            notes={filters.notes}
+            sort={sort?.col ?? ""}
+            dir={sort?.dir ?? ""}
             filtered={filtered}
-            sort={sort ? { col: sort.col, dir: sort.dir } : null}
-            baseQuery={filterQuery}
-            canWrite={canWrite}
-            canManage={canManage}
           />
-        ) : (
-          <div className="card px-5 py-16 text-center">
-            <span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-paper-2 text-faint ring-1 ring-line">
-              {filtered ? <SearchX className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
-            </span>
-            <p className="mt-3 text-sm font-medium text-ink">{filtered ? "Nothing matches these filters" : "No submissions yet"}</p>
-            <p className="mt-1 text-xs text-muted">{filtered ? "Try a wider date range or a different search." : "New entries from this form will show up here."}</p>
-          </div>
-        )}
-
-        {pages > 1 && (
-          <nav className="flex items-center justify-between text-[0.8125rem]" aria-label="Pages">
-            <span className="text-muted">
-              Page <span className="font-medium tabular-nums text-ink">{page}</span> of <span className="tabular-nums">{pages}</span>
-            </span>
-            <div className="flex gap-2">
-              {page > 1 && (
-                <Link href={`/p/${project.id}${withSort({ page: page - 1 })}`} className="btn btn-secondary btn-sm">
-                  <ChevronLeft className="h-4 w-4" /> Newer
-                </Link>
-              )}
-              {page < pages && (
-                <Link href={`/p/${project.id}${withSort({ page: page + 1 })}`} className="btn btn-secondary btn-sm">
-                  Older <ChevronRight className="h-4 w-4" />
-                </Link>
-              )}
+        }
+      >
+        <NavFade className="space-y-4 group-data-[focus=true]/focus:flex group-data-[focus=true]/focus:min-h-0 group-data-[focus=true]/focus:flex-1 group-data-[focus=true]/focus:flex-col group-data-[focus=true]/focus:space-y-0">
+          {rows.length ? (
+            // Keyed so ticked rows reset when you change page, filters or sort.
+            <SubmissionsTable
+              key={`${page}|${filterQuery}|${sort?.col ?? ""}|${sort?.dir ?? ""}`}
+              projectId={project.id}
+              projectShort={project.short}
+              titleColumn={project.titleColumn}
+              available={available}
+              defaults={project.listColumns}
+              initialColumns={initialColumns}
+              initialWidths={view.widths}
+              rows={rows.map((r) => ({
+                id: r.id,
+                received: formatIST(r.received_at),
+                mark: r.mark,
+                notes: r.note_count,
+                flags: r.flagged.length,
+                data: Object.fromEntries(r.headers.map((h, i) => [h, (r.values[i] ?? "").slice(0, CELL_MAX)])),
+                flaggedCols: r.flagged,
+                cellMarks: r.cell_marks,
+              }))}
+              total={total}
+              filters={filters}
+              filtered={filtered}
+              sort={sort ? { col: sort.col, dir: sort.dir } : null}
+              baseQuery={filterQuery}
+              canWrite={canWrite}
+              canManage={canManage}
+            />
+          ) : (
+            <div className="card px-5 py-16 text-center">
+              <span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-paper-2 text-faint ring-1 ring-line">
+                {filtered ? <SearchX className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
+              </span>
+              <p className="mt-3 text-sm font-medium text-ink">{filtered ? "Nothing matches these filters" : "No submissions yet"}</p>
+              <p className="mt-1 text-xs text-muted">{filtered ? "Try a wider date range or a different search." : "New entries from this form will show up here."}</p>
             </div>
-          </nav>
-        )}
-      </NavFade>
+          )}
+
+          {pages > 1 && (
+            <nav className="flex items-center justify-between text-[0.8125rem] group-data-[focus=true]/focus:hidden" aria-label="Pages">
+              <span className="text-muted">
+                Page <span className="font-medium tabular-nums text-ink">{page}</span> of <span className="tabular-nums">{pages}</span>
+              </span>
+              <div className="flex gap-2">
+                {page > 1 && (
+                  <Link href={`/p/${project.id}${withSort({ page: page - 1 })}`} className="btn btn-secondary btn-sm">
+                    <ChevronLeft className="h-4 w-4" /> Newer
+                  </Link>
+                )}
+                {page < pages && (
+                  <Link href={`/p/${project.id}${withSort({ page: page + 1 })}`} className="btn btn-secondary btn-sm">
+                    Older <ChevronRight className="h-4 w-4" />
+                  </Link>
+                )}
+              </div>
+            </nav>
+          )}
+        </NavFade>
+      </TableWorkspace>
     </div>
   );
 }
