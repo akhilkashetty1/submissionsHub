@@ -77,6 +77,46 @@ plus optional `submittedAt` (ISO time) and `flagged` (header names to highlight)
   everything up by header name.
 - Browser posts (only if `INGEST_ORIGINS_*` is set) are rate-limited per IP.
 
+## People, access and roles
+
+Everyone signs in with a username and password. Two kinds of account:
+
+- **Owner**: the `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` login from the Vercel settings. Always an admin, can't be
+  disabled or edited from the app, so a mistake in the People page can never lock everyone out.
+- **People**: added by an admin on **People & access**. Nothing to configure; the tables create themselves.
+
+Access is set per person, per portal (2W, 4W, RoadShield):
+
+| Level | Can |
+|---|---|
+| **Viewer** | open, search and export records |
+| **Contributor** | + add notes and highlight records |
+| **Manager** | + delete records |
+| *no access* | the portal doesn't appear, and its addresses answer "not found" |
+
+An **admin** is a Manager on every portal and also manages people and sees the **Activity log** (deletes and user changes).
+
+How it behaves:
+
+- A new person gets a generated password, shown **once** to the admin to pass on. They must choose their own at first sign-in.
+  Admins can reset a password, disable a person (their notes stay) or delete them.
+- Changes apply immediately: removing access, disabling, or resetting a password ends the person's open sessions on their next click.
+- Every check runs on the server (pages, Excel export and every action), not just in the buttons, and portal/admin pages
+  are checked in layouts above the loading skeleton so the response is a real 404.
+- The owner password is changed in Vercel; everyone else changes theirs on **Account**.
+- Deploying this version signs everyone out once (the session cookie changed). Sign in again.
+
+### Highlights and notes
+
+The replacement for colouring rows in Excel. **Contributors and above** can:
+
+- **Highlight** a record in one of five colours (Needs action, Follow up, Done / OK, For info, Escalated): from the record page, or tick
+  rows (or "Select all N" across pages) and pick a colour. The row is tinted in the list, and the Excel export keeps the row colour.
+- Add **notes** to a record (newest first, with author and time; authors and Managers can delete). Notes are searchable and the export includes them.
+- Filter the list by highlight colour and by "With notes".
+
+Colours and meanings live in `lib/marks.ts`; levels in `lib/permissions.ts`; portals in `lib/projects.ts`.
+
 ## Admin
 
 - **Overview:** totals, last 30 days and flagged counts per form, plus the latest entries.

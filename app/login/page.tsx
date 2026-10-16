@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import LoginForm from "@/components/LoginForm";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  if (await getSession()) redirect("/");
+  const user = await getCurrentUser();
+  if (user) redirect(user.mustChangePassword ? "/account" : "/");
   const { next } = await searchParams;
   return (
     <main className="grid min-h-dvh place-items-center bg-night px-4">

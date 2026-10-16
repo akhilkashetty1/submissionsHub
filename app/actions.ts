@@ -1,10 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { authConfigured, clientIp, endSession, getSession, safeEqual, startSession, verifyPassword } from "@/lib/auth";
+import { authConfigured, clientIp, endSession, startSession } from "@/lib/auth";
+import { authorise } from "@/lib/access";
+import { logActivity } from "@/lib/activity";
 import { query } from "@/lib/db";
-import { getProject } from "@/lib/projects";
-import { deleteByIds, deleteMatching } from "@/lib/submissions";
+import { DUMMY_HASH, safeEqual, verifyPassword } from "@/lib/password";
+import { deleteByIds, deleteMatching, type Filters } from "@/lib/submissions";
+import { getUserByUsername, touchLogin } from "@/lib/users";
 
 const MAX_FAILURES = 8;
 const WINDOW = "15 minutes";
@@ -12,10 +15,10 @@ const WINDOW = "15 minutes";
 export type LoginState = { error?: string };
 
 export async function login(_prev: LoginState, form: FormData): Promise<LoginState> {
-  if (!authConfigured()) return { error: "Admin login isn't set up yet (ADMIN_USERNAME, ADMIN_PASSWORD_HASH, SESSION_SECRET)." };
+  if (!authConfigured()) return { error: "Sign-in isn't set up yet (ADMIN_USERNAME, ADMIN_PASSWORD_HASH, SESSION_SECRET)." };
 
-  const username = String(form.get("username") ?? "").trim();
-  const password = String(form.get("password") ?? "");
+  const username = String(form.get("username") ?? "").trim().slice(0, 64);
+  const password = String(form.get("password") ?? "").slice(0, 200);
   const ip = await clientIp();
 
   const [{ n }] = await query<{ n: number }>(
@@ -24,17 +27,37 @@ export async function login(_prev: LoginState, form: FormData): Promise<LoginSta
   );
   if (n >= MAX_FAILURES) return { error: "Too many attempts. Try again in 15 minutes." };
 
-  // Always run the password check so a wrong username takes as long as a wrong password.
-  const passwordOk = verifyPassword(password, process.env.ADMIN_PASSWORD_HASH!);
-  const usernameOk = safeEqual(username.toLowerCase(), process.env.ADMIN_USERNAME!.toLowerCase());
-  if (!passwordOk || !usernameOk) {
+  let who: { id: number; username: string; version: number } | null = null;
+  let mustChange = false;
+  let disabled = false;
+
+  if (safeEqual(username.toLowerCase(), process.env.ADMIN_USERNAME!.toLowerCase())) {
+    // The owner account from the environment settings.
+    if (verifyPassword(password, process.env.ADMIN_PASSWORD_HASH!)) who = { id: 0, username: process.env.ADMIN_USERNAME!, version: 0 };
+  } else {
+    // Everyone else. The password check always runs, so an unknown name takes as long as a wrong password.
+    const user = username ? await getUserByUsername(username) : null;
+    const passwordOk = verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
+    if (user && passwordOk) {
+      if (!user.active) disabled = true;
+      else {
+        who = { id: user.id, username: user.username, version: user.sessionVersion };
+        mustChange = user.mustChangePassword;
+        await touchLogin(user.id);
+      }
+    }
+  }
+
+  if (disabled) return { error: "This account has been disabled. Ask an admin to turn it back on." };
+  if (!who) {
     await query(`insert into login_failures (ip) values ($1)`, [ip]);
     await query(`delete from login_failures where at < now() - interval '1 day'`);
     return { error: "Wrong username or password." };
   }
 
   await query(`delete from login_failures where ip = $1`, [ip]);
-  await startSession(process.env.ADMIN_USERNAME!);
+  await startSession(who);
+  if (mustChange) redirect("/account");
   const next = String(form.get("next") ?? "");
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
 }
@@ -48,22 +71,14 @@ export async function logout() {
 
 export type DeleteResult = { ok: true; deleted: number } | { ok: false; error: string };
 
-/** Every delete re-checks the login: a server action is a public endpoint, not just a button. */
-async function authorise(projectId: unknown) {
-  if (!(await getSession())) return { ok: false, error: "Your session expired. Sign in again to delete." } as const;
-  const project = typeof projectId === "string" ? getProject(projectId) : undefined;
-  if (!project) return { ok: false, error: "Unknown project." } as const;
-  return { ok: true, project } as const;
-}
-
-/** Permanently deletes the chosen submissions. There is no undo. */
+/** Permanently deletes the chosen submissions. Needs Manager on that portal. There is no undo. */
 export async function deleteSubmissions(projectId: string, ids: string[]): Promise<DeleteResult> {
-  const auth = await authorise(projectId);
+  const auth = await authorise(projectId, "manage");
   if (!auth.ok) return { ok: false, error: auth.error };
   if (!Array.isArray(ids) || !ids.length) return { ok: false, error: "Nothing selected." };
   try {
     const deleted = await deleteByIds(auth.project.id, ids.map(String));
-    console.log(`Deleted ${deleted} ${auth.project.id} submission(s) by id`);
+    await logActivity(auth.user.username, "records.delete", auth.project.id, { count: deleted, how: "selected" });
     return { ok: true, deleted };
   } catch (err) {
     console.error("Delete failed", err);
@@ -71,14 +86,23 @@ export async function deleteSubmissions(projectId: string, ids: string[]): Promi
   }
 }
 
-/** Permanently deletes everything matching the current search/date filters (or the whole project when there are none). */
-export async function deleteAllMatching(projectId: string, filters: { q?: string; from?: string; to?: string }): Promise<DeleteResult> {
-  const auth = await authorise(projectId);
+const cleanFilters = (f: Filters | undefined): Filters => {
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  return { q: s(f?.q), from: s(f?.from), to: s(f?.to), mark: s(f?.mark), notes: s(f?.notes) };
+};
+
+/** Permanently deletes everything matching the current filters (or the whole portal when there are none). */
+export async function deleteAllMatching(projectId: string, filters: Filters): Promise<DeleteResult> {
+  const auth = await authorise(projectId, "manage");
   if (!auth.ok) return { ok: false, error: auth.error };
-  const clean = (v: unknown) => (typeof v === "string" ? v : "");
   try {
-    const deleted = await deleteMatching(auth.project.id, { q: clean(filters?.q), from: clean(filters?.from), to: clean(filters?.to) });
-    console.log(`Deleted ${deleted} ${auth.project.id} submission(s) by filter`);
+    const f = cleanFilters(filters);
+    const deleted = await deleteMatching(auth.project.id, f);
+    await logActivity(auth.user.username, "records.delete", auth.project.id, {
+      count: deleted,
+      how: "all matching",
+      filters: Object.fromEntries(Object.entries(f).filter(([, v]) => v)),
+    });
     return { ok: true, deleted };
   } catch (err) {
     console.error("Delete failed", err);
