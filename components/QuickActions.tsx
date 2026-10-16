@@ -147,7 +147,7 @@ export default function QuickActions({
       // Keep the text selection alive while pressing buttons (but let the note box take focus normally).
       onMouseDown={(e) => !(e.target as HTMLElement).closest("textarea") && e.preventDefault()}
       style={{ ...pos, width: POPOVER_W }}
-      className="fixed z-50 rounded-2xl bg-night p-3 text-sm text-white shadow-2xl ring-1 ring-night-line"
+      className="pop-in fixed z-50 rounded-xl bg-night/[0.97] p-3 text-[0.8125rem] text-white shadow-pop ring-1 ring-white/10 backdrop-blur"
     >
       <div className="mb-2.5 flex items-start justify-between gap-2">
         <p className="min-w-0 text-xs text-[#9aa1ad]">
@@ -155,7 +155,7 @@ export default function QuickActions({
           {hasCell && scope === "cell" ? <> · {target.col}</> : <> · whole row</>}
           {target.quote && <span className="mt-0.5 block truncate italic text-[#c9ced8]">“{target.quote}”</span>}
         </p>
-        <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded p-1 text-[#8b919c] hover:bg-night-2 hover:text-white">
+        <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded p-1 text-[#8b919c] hover:bg-white/[0.07] hover:text-white">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -163,7 +163,7 @@ export default function QuickActions({
       {canWrite && !noting && (
         <>
           {hasCell && (
-            <div role="radiogroup" aria-label="What to highlight" className="mb-2.5 grid grid-cols-2 gap-1 rounded-lg bg-night-2 p-1 text-xs font-medium">
+            <div role="radiogroup" aria-label="What to highlight" className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-white/[0.06] p-0.5 text-xs font-medium ring-1 ring-white/[0.06]">
               {(["cell", "row"] as const).map((s) => (
                 <button
                   key={s}
@@ -171,7 +171,7 @@ export default function QuickActions({
                   role="radio"
                   aria-checked={scope === s}
                   onClick={() => setScope(s)}
-                  className={cn("rounded-md px-2 py-1.5 transition", scope === s ? "bg-white text-night shadow" : "text-[#9aa1ad] hover:text-white")}
+                  className={cn("rounded-md px-2 py-1.5 transition", scope === s ? "bg-white text-night shadow-sm" : "text-[#9aa1ad] hover:text-white")}
                 >
                   {s === "cell" ? "This value" : "Whole row"}
                 </button>
@@ -197,7 +197,7 @@ export default function QuickActions({
                 {current === m.id ? <Check className="h-4 w-4" strokeWidth={3} /> : <span className="text-[0.65rem] font-bold opacity-70">{i + 1}</span>}
               </button>
             ))}
-            <button type="button" disabled={pending || current === null} onClick={() => paint(null)} title="Clear (press 0)" aria-label="Clear highlight" className="grid h-8 w-8 place-items-center rounded-full text-[#8b919c] hover:bg-night-2 hover:text-white disabled:opacity-30">
+            <button type="button" disabled={pending || current === null} onClick={() => paint(null)} title="Clear (press 0)" aria-label="Clear highlight" className="grid h-8 w-8 place-items-center rounded-full text-[#8b919c] hover:bg-white/[0.07] hover:text-white disabled:opacity-30">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
             </button>
           </div>
@@ -217,7 +217,7 @@ export default function QuickActions({
             maxLength={2000}
             placeholder="Write a note about this record…"
             aria-label="Note"
-            className="w-full resize-none rounded-lg border border-night-line bg-night-2 px-3 py-2 text-sm text-white outline-none placeholder:text-[#6b717c] focus:border-brand"
+            className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.8125rem] text-white outline-none transition placeholder:text-[#6b717c] focus:border-white/25 focus:bg-white/[0.06]"
           />
           <div className="flex items-center justify-between gap-2">
             <span className="text-[0.7rem] text-[#6b717c]">Ctrl/⌘ + Enter to save</span>
@@ -240,19 +240,19 @@ export default function QuickActions({
       )}
 
       {!noting && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-1 border-t border-night-line pt-2.5 text-xs font-medium">
+        <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-white/[0.08] pt-2.5 text-xs font-medium">
           {canWrite && (
-            <button type="button" onClick={() => setNoting(true)} className="flex items-center gap-1.5 rounded-lg bg-night-2 px-2.5 py-1.5 hover:bg-[#222733]">
+            <button type="button" onClick={() => setNoting(true)} className="flex items-center gap-1.5 rounded-lg bg-white/[0.08] px-2.5 py-1.5 transition hover:bg-white/[0.13]">
               <MessageSquarePlus className="h-3.5 w-3.5" /> Add note
             </button>
           )}
-          <button type="button" onClick={() => copy("text", target.quote || target.value)} disabled={!target.quote && !target.value} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[#c9ced8] hover:bg-night-2 disabled:opacity-40">
+          <button type="button" onClick={() => copy("text", target.quote || target.value)} disabled={!target.quote && !target.value} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[#c9ced8] hover:bg-white/[0.07] disabled:opacity-40">
             {copied === "text" ? <Check className="h-3.5 w-3.5 text-ok" /> : <ClipboardCopy className="h-3.5 w-3.5" />} Copy {target.quote ? "selection" : "value"}
           </button>
-          <button type="button" onClick={() => copy("row", rowCopyText)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[#c9ced8] hover:bg-night-2">
+          <button type="button" onClick={() => copy("row", rowCopyText)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[#c9ced8] hover:bg-white/[0.07]">
             {copied === "row" ? <Check className="h-3.5 w-3.5 text-ok" /> : <ClipboardCopy className="h-3.5 w-3.5" />} Copy row
           </button>
-          <Link href={`/p/${projectId}/${target.rowId}`} onClick={() => startNav()} className="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[#c9ced8] hover:bg-night-2">
+          <Link href={`/p/${projectId}/${target.rowId}`} onClick={() => startNav()} className="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[#c9ced8] hover:bg-white/[0.07]">
             <ExternalLink className="h-3.5 w-3.5" /> Open
           </Link>
         </div>

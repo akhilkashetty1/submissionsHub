@@ -4,36 +4,35 @@ import { useActionState } from "react";
 import { Loader2, LockKeyhole } from "lucide-react";
 import { login, type LoginState } from "@/app/actions";
 
-const input =
-  "w-full rounded-lg border border-night-line bg-night-2 px-3.5 py-2.5 text-white outline-none transition-colors placeholder:text-[#5b616d] focus:border-brand";
+const input = "field h-10 text-sm";
 
 export default function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {});
 
   return (
-    <form action={action} className="space-y-4 rounded-2xl border border-night-line bg-[#13161c] p-6 shadow-2xl">
+    <form action={action} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div>
-        <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-[#c9ced8]">
+        <label htmlFor="username" className="label">
           Username
         </label>
         <input id="username" name="username" autoComplete="username" required className={input} />
       </div>
       <div>
-        <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-[#c9ced8]">
+        <label htmlFor="password" className="label">
           Password
         </label>
         <input id="password" name="password" type="password" autoComplete="current-password" required className={input} />
       </div>
       {state.error && (
-        <p role="alert" className="rounded-lg bg-flag/15 px-3 py-2 text-sm text-[#ff8a8f]">
+        <p role="alert" className="rounded-lg bg-flag-wash px-3 py-2 text-[0.8125rem] font-medium text-flag ring-1 ring-[#f6d4d6]">
           {state.error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 font-semibold text-night transition hover:brightness-105 disabled:opacity-70"
+        className="btn btn-primary h-10 w-full text-sm"
       >
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
         Sign in

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, SearchX } from "lucide-react";
 import { requireProjectAccess } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { getProject } from "@/lib/projects";
@@ -67,27 +67,29 @@ export default async function ProjectPage({ params, searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-[96rem] space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="h-3 w-3 rounded-full" style={{ background: project.accent }} />
-            <h1 className="text-2xl font-semibold">{project.name}</h1>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl ring-1 ring-black/[0.06]" style={{ background: `color-mix(in oklab, ${project.accent} 18%, white)` }}>
+            <span className="h-3.5 w-3.5 rounded-[4px] ring-1 ring-black/10" style={{ background: project.accent }} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="page-title truncate">{project.name}</h1>
+            <p className="mt-0.5 text-[0.8125rem] text-muted">
+              <span className="font-medium tabular-nums text-ink-soft">{total.toLocaleString("en-IN")}</span> submission{total === 1 ? "" : "s"}
+              {filtered && " matching your filters"}
+              {sort && (
+                <>
+                  {" "}
+                  · sorted by <strong className="font-medium text-ink-soft">{sort.col === RECEIVED ? "time received" : sort.col}</strong> ({sort.dir === "asc" ? "A→Z / low→high" : "Z→A / high→low"})
+                </>
+              )}
+            </p>
           </div>
-          <p className="mt-1 text-sm text-muted">
-            {total} submission{total === 1 ? "" : "s"}
-            {filtered && " matching your filters"}
-            {sort && (
-              <>
-                {" "}
-                · sorted by <strong className="font-semibold text-ink-soft">{sort.col === RECEIVED ? "time received" : sort.col}</strong> ({sort.dir === "asc" ? "A→Z / low→high" : "Z→A / high→low"})
-              </>
-            )}
-          </p>
         </div>
         <ExportButton
           href={`/api/export/${project.id}${filterQuery ? `?${filterQuery}` : ""}`}
           label={`Export to Excel${filtered ? " (filtered)" : ""}`}
-          className="flex items-center gap-2 rounded-lg bg-night px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-night-2 disabled:opacity-80"
+          className="btn btn-secondary"
         />
       </header>
 
@@ -103,7 +105,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
         filtered={filtered}
       />
 
-      <NavFade className="space-y-5">
+      <NavFade className="space-y-4">
         {rows.length ? (
           // Keyed so ticked rows reset when you change page, filters or sort.
           <SubmissionsTable
@@ -134,24 +136,28 @@ export default async function ProjectPage({ params, searchParams }: Props) {
             canManage={canManage}
           />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
-            <p className="px-5 py-14 text-center text-sm text-muted">{filtered ? "Nothing matches these filters." : "No submissions yet for this form."}</p>
+          <div className="card px-5 py-16 text-center">
+            <span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-paper-2 text-faint ring-1 ring-line">
+              {filtered ? <SearchX className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
+            </span>
+            <p className="mt-3 text-sm font-medium text-ink">{filtered ? "Nothing matches these filters" : "No submissions yet"}</p>
+            <p className="mt-1 text-xs text-muted">{filtered ? "Try a wider date range or a different search." : "New entries from this form will show up here."}</p>
           </div>
         )}
 
         {pages > 1 && (
-          <nav className="flex items-center justify-between text-sm" aria-label="Pages">
+          <nav className="flex items-center justify-between text-[0.8125rem]" aria-label="Pages">
             <span className="text-muted">
-              Page {page} of {pages}
+              Page <span className="font-medium tabular-nums text-ink">{page}</span> of <span className="tabular-nums">{pages}</span>
             </span>
             <div className="flex gap-2">
               {page > 1 && (
-                <Link href={`/p/${project.id}${withSort({ page: page - 1 })}`} className="flex items-center gap-1 rounded-lg border border-line bg-paper px-3 py-1.5 hover:border-ink">
+                <Link href={`/p/${project.id}${withSort({ page: page - 1 })}`} className="btn btn-secondary btn-sm">
                   <ChevronLeft className="h-4 w-4" /> Newer
                 </Link>
               )}
               {page < pages && (
-                <Link href={`/p/${project.id}${withSort({ page: page + 1 })}`} className="flex items-center gap-1 rounded-lg border border-line bg-paper px-3 py-1.5 hover:border-ink">
+                <Link href={`/p/${project.id}${withSort({ page: page + 1 })}`} className="btn btn-secondary btn-sm">
                   Older <ChevronRight className="h-4 w-4" />
                 </Link>
               )}

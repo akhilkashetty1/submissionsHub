@@ -38,7 +38,7 @@ export default function AppShell({ initialCollapsed, children }: { initialCollap
         data-collapsed={collapsed}
         className={cn(
           "group/side min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out",
-          collapsed ? "lg:grid-cols-[4.5rem_1fr]" : "lg:grid-cols-[16rem_1fr]",
+          collapsed ? "lg:grid-cols-[4rem_1fr]" : "lg:grid-cols-[16.5rem_1fr]",
         )}
       >
         {children}

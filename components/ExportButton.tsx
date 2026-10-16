@@ -40,7 +40,7 @@ export default function ExportButton({ href, label, className }: { href: string;
         {busy ? "Preparing…" : label}
       </button>
       {error && (
-        <span role="alert" className="absolute right-0 top-full z-10 mt-2 w-max max-w-[16rem] rounded-lg bg-flag px-3 py-2 text-xs font-medium text-white shadow-lg">
+        <span role="alert" className="pop-in absolute right-0 top-full z-10 mt-2 w-max max-w-[16rem] rounded-lg bg-flag px-3 py-2 text-xs font-medium text-white shadow-pop">
           {error}
         </span>
       )}

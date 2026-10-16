@@ -8,7 +8,7 @@ export default function Loading() {
         <Skeleton className="h-8 w-44" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
-      <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
+      <div className="divide-y divide-line-soft overflow-hidden card">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="flex items-center gap-3 px-5 py-4">
             <Skeleton className="h-7 w-7 rounded-full" />

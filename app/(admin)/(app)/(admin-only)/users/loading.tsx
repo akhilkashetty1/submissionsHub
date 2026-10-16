@@ -12,7 +12,7 @@ export default function Loading() {
         <Skeleton className="h-10 w-32 rounded-lg" />
       </div>
       <Skeleton className="h-24 w-full rounded-2xl" />
-      <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
+      <div className="divide-y divide-line-soft overflow-hidden card">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="flex items-center gap-4 px-5 py-4">
             <Skeleton className="h-10 w-10 rounded-full" />

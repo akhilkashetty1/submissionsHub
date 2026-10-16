@@ -325,7 +325,7 @@ export default function SubmissionsTable({
   const quickRow = quick ? byId.get(quick.rowId) : undefined;
 
   const scope = filtered ? "matching your filters" : `in ${projectShort}`;
-  const th = "border-b border-r border-line bg-paper-2 px-3 py-2 text-left align-bottom text-[0.7rem] font-semibold uppercase leading-tight tracking-wide text-muted";
+  const th = "border-b border-r border-line border-r-line-soft bg-[#fafafa] px-3 py-2 text-left align-bottom text-xs font-medium leading-tight text-muted";
 
   return (
     <>
@@ -334,21 +334,18 @@ export default function SubmissionsTable({
           type="button"
           onClick={() => setPickerOpen((o) => !o)}
           aria-expanded={pickerOpen}
-          className={cn(
-            "flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition",
-            pickerOpen ? "border-ink bg-night text-white" : "border-line bg-paper hover:border-ink",
-          )}
+          className={cn("btn btn-sm", pickerOpen ? "btn-primary" : "btn-secondary")}
         >
-          <Columns3 className="h-4 w-4" /> Columns
-          <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", pickerOpen ? "bg-white/15" : "bg-paper-2 text-ink-soft")}>{columns.length}</span>
+          <Columns3 className="h-3.5 w-3.5" /> Columns
+          <span className={cn("rounded-full px-1.5 py-0.5 text-[0.6875rem] tabular-nums leading-none", pickerOpen ? "bg-white/15" : "bg-paper-2 text-ink-soft ring-1 ring-line")}>{columns.length}</span>
         </button>
-        <p className="hidden text-xs text-muted sm:block">
+        <p className="hidden text-xs text-faint sm:block">
           {canWrite ? "Select text to highlight or add a note · right-click a row · " : ""}drag a column edge to resize · click a heading to sort
         </p>
       </div>
 
       {notice && (
-        <p role="status" className="mb-4 flex items-center gap-2 rounded-xl bg-ok/10 px-4 py-2.5 text-sm font-medium text-ok">
+        <p role="status" className="pop-in mb-3 flex items-center gap-2 rounded-lg bg-[#effaf3] px-3.5 py-2.5 text-[0.8125rem] font-medium text-ok ring-1 ring-[#cdebd8]">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           {notice}
           <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="ml-auto text-ok/70 hover:text-ok">
@@ -358,23 +355,23 @@ export default function SubmissionsTable({
       )}
 
       {selectable && canSelectAll && (
-        <p className="mb-3 rounded-xl bg-brand/25 px-4 py-2.5 text-sm">
+        <p className="mb-3 rounded-lg bg-[#fafbe3] px-3.5 py-2.5 text-[0.8125rem] text-ink-soft ring-1 ring-[#e9eba6]">
           All {rows.length} on this page are selected.{" "}
-          <button type="button" onClick={() => setAllMatching(true)} className="font-semibold underline underline-offset-2 hover:no-underline">
+          <button type="button" onClick={() => setAllMatching(true)} className="font-semibold text-ink underline decoration-ink/30 underline-offset-2 hover:decoration-ink">
             Select all {total} {scope}
           </button>
         </p>
       )}
       {selectable && allMatching && (
-        <p className="mb-3 rounded-xl bg-brand/25 px-4 py-2.5 text-sm">
+        <p className="mb-3 rounded-lg bg-[#fafbe3] px-3.5 py-2.5 text-[0.8125rem] text-ink-soft ring-1 ring-[#e9eba6]">
           All <strong>{total}</strong> {scope} are selected.{" "}
-          <button type="button" onClick={clear} className="font-semibold underline underline-offset-2 hover:no-underline">
+          <button type="button" onClick={clear} className="font-semibold text-ink underline decoration-ink/30 underline-offset-2 hover:decoration-ink">
             Clear selection
           </button>
         </p>
       )}
 
-      <div className="relative overflow-hidden rounded-2xl border border-line bg-paper shadow-sm" style={{ "--sticky": `${stickyLeft}px` } as React.CSSProperties}>
+      <div className="card relative overflow-hidden" style={{ "--sticky": `${stickyLeft}px` } as React.CSSProperties}>
         <div ref={scroller} onMouseUp={onSelectEnd} onKeyUp={(e) => e.shiftKey && onSelectEnd()} className="max-h-[72dvh] overflow-auto overscroll-x-contain" tabIndex={0} aria-label="Submissions table, scrollable">
           <table ref={tableRef} className="border-separate border-spacing-0 text-sm" style={{ width: tableWidth, minWidth: "100%", tableLayout: "fixed" }}>
             <colgroup>
@@ -398,7 +395,7 @@ export default function SubmissionsTable({
                   </th>
                 )}
                 <th
-                  className={cn(th, "sticky top-0 z-20 px-2", selectable ? "md:left-[44px]" : "md:left-0", sort?.col === RECEIVED && "bg-brand/30")}
+                  className={cn(th, "sticky top-0 z-20 px-2", selectable ? "md:left-[44px]" : "md:left-0", sort?.col === RECEIVED && "bg-paper-2 text-ink")}
                   aria-sort={sort?.col === RECEIVED ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                 >
                   <Link href={sortHref(RECEIVED)} className="flex items-center gap-1 hover:text-ink">
@@ -406,9 +403,9 @@ export default function SubmissionsTable({
                   </Link>
                 </th>
                 {columns.map((c) => (
-                  <th key={c} className={cn(th, "sticky top-0 z-10", sort?.col === c && "bg-brand/30")} aria-sort={sort?.col === c ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
+                  <th key={c} className={cn(th, "sticky top-0 z-10", sort?.col === c && "bg-paper-2 text-ink")} aria-sort={sort?.col === c ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
                     <Link href={sortHref(c)} title={`Sort by ${c}`} className="flex items-end justify-between gap-1 pr-2 hover:text-ink">
-                      <span className="line-clamp-2 break-words normal-case tracking-normal">{c}</span>
+                      <span className="line-clamp-2 break-words">{c}</span>
                       {sortIcon(c)}
                     </Link>
                     <span
@@ -418,7 +415,7 @@ export default function SubmissionsTable({
                       title="Drag to resize · double-click to reset"
                       onPointerDown={(e) => startResize(e, c)}
                       onDoubleClick={() => resetWidth(c)}
-                      className="absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none select-none hover:bg-brand/70 active:bg-brand"
+                      className="absolute -right-px top-0 h-full w-1.5 cursor-col-resize touch-none select-none transition-colors hover:bg-ink/15 active:bg-ink/30"
                     />
                   </th>
                 ))}
@@ -430,7 +427,7 @@ export default function SubmissionsTable({
                 const mark = markById(rowMark(r));
                 const notes = rowNotes(r);
                 const active = quick?.rowId === r.id;
-                const cell = "border-b border-line px-3 py-2.5";
+                const cell = "border-b border-line-soft px-3 py-2.5";
                 return (
                   <tr
                     key={r.id}
@@ -438,7 +435,7 @@ export default function SubmissionsTable({
                     onClick={(e) => openRow(e, r.id)}
                     onContextMenu={(e) => onRowContext(e, r)}
                     style={!on && mark ? { backgroundColor: mark.bg } : undefined}
-                    className={cn("group cursor-pointer", on ? "bg-[#f6f7cf]" : !mark && "bg-paper hover:bg-paper-2", active && "outline outline-2 -outline-offset-2 outline-brand")}
+                    className={cn("group cursor-pointer transition-colors", on ? "bg-[#f8f9de]" : !mark && "bg-paper hover:bg-[#fafafb]", active && "outline outline-2 -outline-offset-2 outline-ink/25")}
                   >
                     {selectable && (
                       <td className={cn(cell, "z-[5] bg-inherit px-4 md:sticky md:left-0")}>
@@ -452,19 +449,19 @@ export default function SubmissionsTable({
                         />
                       </td>
                     )}
-                    <td className={cn(cell, "z-[5] border-r bg-inherit px-2 md:sticky", selectable ? "md:left-[44px]" : "md:left-0")}>
+                    <td className={cn(cell, "z-[5] border-r border-r-line bg-inherit px-2 md:sticky", selectable ? "md:left-[44px]" : "md:left-0")}>
                       <div className="flex items-center gap-1.5">
-                        <Link href={`/p/${projectId}/${r.id}`} className="flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap text-ink-soft">
+                        <Link href={`/p/${projectId}/${r.id}`} className="flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap tabular-nums text-ink-soft">
                           {mark && <span title={mark.label} aria-label={mark.label} className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: mark.dot }} />}
                           <span className="min-w-0 flex-1 truncate">{r.received}</span>
                           {r.flags > 0 && (
-                            <span title={`${r.flags} flagged`} className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-flag">
+                            <span title={`${r.flags} flagged`} className="flex shrink-0 items-center gap-0.5 rounded-full bg-flag-wash px-1.5 py-0.5 text-[0.6875rem] font-semibold leading-none text-flag ring-1 ring-[#f6d4d6]">
                               <TriangleAlert className="h-3 w-3" />
                               {r.flags}
                             </span>
                           )}
                           {notes > 0 && (
-                            <span title={`${notes} note${notes === 1 ? "" : "s"}`} className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-ink-soft">
+                            <span title={`${notes} note${notes === 1 ? "" : "s"}`} className="flex shrink-0 items-center gap-0.5 rounded-full bg-paper-2 px-1.5 py-0.5 text-[0.6875rem] font-semibold leading-none text-ink-soft ring-1 ring-line">
                               <MessageSquare className="h-3 w-3" />
                               {notes}
                             </span>
@@ -476,7 +473,7 @@ export default function SubmissionsTable({
                             onClick={(e) => onRowButton(e, r)}
                             title="Highlight or add a note"
                             aria-label={`Quick actions for ${titleOf(r)}`}
-                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition hover:bg-black/5 hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition hover:bg-black/[0.06] hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
@@ -493,7 +490,7 @@ export default function SubmissionsTable({
                           data-col={c}
                           title={v}
                           style={cm ? { backgroundColor: cm.bg, boxShadow: `inset 4px 0 0 ${cm.dot}` } : undefined}
-                          className={cn(cell, "overflow-hidden text-ellipsis whitespace-nowrap", i === 0 && "font-medium", flagged && !cm && "bg-flag-wash font-semibold text-flag", flagged && cm && "font-semibold text-flag")}
+                          className={cn(cell, "overflow-hidden text-ellipsis whitespace-nowrap text-ink-soft", i === 0 && "font-medium text-ink", flagged && !cm && "bg-flag-wash font-semibold text-flag", flagged && cm && "font-semibold text-flag")}
                         >
                           {v || <span className="text-muted">—</span>}
                         </td>
@@ -508,22 +505,22 @@ export default function SubmissionsTable({
         {/* Edge shadows: "there's more this way" */}
         <div
           aria-hidden
-          className={cn("pointer-events-none absolute inset-y-0 left-0 z-30 w-5 bg-gradient-to-r from-black/15 to-transparent transition-opacity md:left-[var(--sticky)]", edges.left ? "opacity-100" : "opacity-0")}
+          className={cn("pointer-events-none absolute inset-y-0 left-0 z-30 w-6 bg-gradient-to-r from-black/[0.07] to-transparent transition-opacity md:left-[var(--sticky)]", edges.left ? "opacity-100" : "opacity-0")}
         />
-        <div aria-hidden className={cn("pointer-events-none absolute inset-y-0 right-0 z-30 w-8 bg-gradient-to-l from-black/15 to-transparent transition-opacity", edges.right ? "opacity-100" : "opacity-0")} />
+        <div aria-hidden className={cn("pointer-events-none absolute inset-y-0 right-0 z-30 w-10 bg-gradient-to-l from-black/[0.07] to-transparent transition-opacity", edges.right ? "opacity-100" : "opacity-0")} />
       </div>
 
       {selectable && count > 0 && (
         <div className="fixed inset-x-0 bottom-5 z-30 flex justify-center px-4">
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-3xl bg-night py-2.5 pl-5 pr-3 text-sm text-white shadow-2xl ring-1 ring-night-line">
+          <div className="pop-in flex flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl bg-night/95 py-2 pl-4 pr-2 text-[0.8125rem] text-white shadow-pop ring-1 ring-white/10 backdrop-blur">
             <span>
-              <strong className="tabular-nums">{count}</strong> selected
+              <strong className="mr-0.5 inline-grid min-w-6 place-items-center rounded-md bg-white/10 px-1.5 py-0.5 tabular-nums">{count}</strong> selected
             </span>
             <button type="button" onClick={clear} className="text-[#8b919c] hover:text-white">
               Clear
             </button>
             {canWrite && (
-              <span className="flex items-center gap-2 border-l border-night-line pl-4">
+              <span className="flex items-center gap-2 border-l border-white/10 pl-4">
                 <span className="text-[#8b919c]">Highlight</span>
                 <MarkPicker
                   dark
@@ -544,7 +541,7 @@ export default function SubmissionsTable({
                   setError(null);
                   setConfirming(true);
                 }}
-                className="flex items-center gap-1.5 rounded-full bg-flag px-4 py-2 font-semibold transition hover:brightness-110"
+                className="btn btn-danger btn-sm rounded-lg"
               >
                 <Trash2 className="h-4 w-4" /> Delete
               </button>
@@ -579,8 +576,11 @@ export default function SubmissionsTable({
       )}
 
       {toast && (
-        <div role="status" aria-live="polite" className="fixed left-1/2 top-4 z-[60] -translate-x-1/2 rounded-full bg-night px-4 py-2 text-sm font-medium text-white shadow-2xl ring-1 ring-night-line">
-          {toast}
+        <div role="status" aria-live="polite" className="fixed left-1/2 top-4 z-[60] -translate-x-1/2">
+          <div className="pop-in flex items-center gap-2 rounded-xl bg-night/95 py-2 pl-3 pr-4 text-[0.8125rem] font-medium text-white shadow-pop ring-1 ring-white/10 backdrop-blur">
+            <CheckCircle2 className="h-4 w-4 text-[#7ee2a8]" />
+            {toast}
+          </div>
         </div>
       )}
 

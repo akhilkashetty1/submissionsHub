@@ -33,7 +33,7 @@ export default function DeleteSubmissionButton({ projectId, id, title }: { proje
           setError(null);
           setOpen(true);
         }}
-        className="flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium text-flag hover:border-flag hover:bg-flag-wash"
+        className="btn btn-secondary text-flag hover:border-[#f0c4c7] hover:bg-flag-wash"
       >
         <Trash2 className="h-4 w-4" /> Delete
       </button>

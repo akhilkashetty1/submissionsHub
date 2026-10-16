@@ -24,7 +24,7 @@ export type UserRow = {
 
 type Credentials = { heading: string; name: string; username: string; password: string };
 
-const input = "w-full rounded-lg border border-line bg-paper-2 px-3 py-2 text-sm outline-none focus:border-ink focus:bg-white";
+const input = "field";
 
 export default function UsersManager({ users, ownerName }: { users: UserRow[]; ownerName: string }) {
   const router = useRouter();
@@ -37,55 +37,63 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">People &amp; access</h1>
-          <p className="mt-1 text-sm text-muted">Choose who can open each portal, and what they can do there. Changes apply the next time they load a page.</p>
+          <h1 className="page-title">People &amp; access</h1>
+          <p className="page-sub">Choose who can open each portal, and what they can do there. Changes apply the next time they load a page.</p>
         </div>
         <button
           type="button"
           onClick={() => setEditor({ user: null })}
-          className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-night transition hover:brightness-105"
+          className="btn btn-primary"
         >
           <UserPlus className="h-4 w-4" /> Add person
         </button>
       </div>
 
-      <section className="grid gap-3 rounded-2xl border border-line bg-paper p-5 shadow-sm sm:grid-cols-3" aria-label="What each level can do">
-        {LEVELS.map((l) => (
-          <div key={l}>
-            <p className="text-sm font-semibold">{LEVEL_LABEL[l]}</p>
-            <p className="mt-0.5 text-xs text-muted">{LEVEL_HELP[l]}</p>
-          </div>
-        ))}
-        <p className="border-t border-line pt-3 text-xs text-muted sm:col-span-3">
-          <strong className="text-ink">Admins</strong> have Manager on every portal and also manage people here and see the activity log.
+      <section className="card overflow-hidden" aria-label="What each level can do">
+        <div className="grid divide-y divide-line-soft sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          {LEVELS.map((l, i) => (
+            <div key={l} className="flex items-start gap-3 p-4">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-paper-2 text-[0.6875rem] font-semibold text-ink-soft ring-1 ring-line">{i + 1}</span>
+              <div>
+                <p className="text-[0.8125rem] font-semibold">{LEVEL_LABEL[l]}</p>
+                <p className="mt-0.5 text-xs text-muted">{LEVEL_HELP[l]}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="flex items-center gap-2 border-t border-line-soft bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-ink-soft" />
+          <span>
+            <strong className="font-medium text-ink">Admins</strong> have Manager on every portal and also manage people here and see the activity log.
+          </span>
         </p>
       </section>
 
-      <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
-        <ul className="divide-y divide-line">
+      <div className="card overflow-hidden">
+        <ul className="divide-y divide-line-soft">
           <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
             <Avatar name={ownerName} />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 font-medium">
-                {ownerName} <span className="rounded-full bg-night px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-brand">Owner</span>
+              <p className="flex items-center gap-2 text-[0.8125rem] font-medium">
+                {ownerName} <span className="rounded-md bg-night px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-brand">Owner</span>
               </p>
               <p className="text-xs text-muted">Always an admin on every portal. Sign-in is set in the Vercel environment settings, so it can&rsquo;t be locked out from here.</p>
             </div>
           </li>
 
           {users.map((u) => (
-            <li key={u.id} className={cn("flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4", !u.active && "bg-paper-2/70")}>
+            <li key={u.id} className={cn("group/user flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5 transition-colors hover:bg-[#fafafa]", !u.active && "bg-paper-2/60")}>
               <Avatar name={u.displayName} muted={!u.active} />
               <div className="min-w-[12rem] flex-1">
-                <p className="flex flex-wrap items-center gap-2 font-medium">
+                <p className="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
                   <span className={cn(!u.active && "text-muted")}>{u.displayName}</span>
                   {u.isAdmin && (
-                    <span className="flex items-center gap-1 rounded-full bg-night px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-brand">
+                    <span className="flex items-center gap-1 rounded-md bg-night px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-brand">
                       <ShieldCheck className="h-3 w-3" /> Admin
                     </span>
                   )}
-                  {!u.active && <span className="rounded-full bg-flag-wash px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-flag">Disabled</span>}
-                  {u.active && u.mustChange && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-800">Hasn&rsquo;t set own password yet</span>}
+                  {!u.active && <span className="rounded-md bg-flag-wash px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-flag ring-1 ring-[#f6d4d6]">Disabled</span>}
+                  {u.active && u.mustChange && <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">Hasn&rsquo;t set own password yet</span>}
                 </p>
                 <p className="text-xs text-muted">
                   @{u.username} · {u.lastLogin ? `last signed in ${u.lastLogin}` : "never signed in"}
@@ -93,16 +101,16 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {u.isAdmin ? (
-                  <span className="rounded-md bg-paper-2 px-2 py-1 text-xs text-ink-soft">All portals · Manager</span>
+                  <span className="chip">All portals · Manager</span>
                 ) : PROJECTS.some((p) => u.access[p.id]) ? (
                   PROJECTS.filter((p) => u.access[p.id]).map((p) => (
-                    <span key={p.id} className="flex items-center gap-1.5 rounded-md bg-paper-2 px-2 py-1 text-xs text-ink-soft">
-                      <span className="h-2 w-2 rounded-full" style={{ background: p.accent }} />
+                    <span key={p.id} className="chip">
+                      <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: p.accent }} />
                       {p.short} · <strong className="font-semibold text-ink">{LEVEL_LABEL[u.access[p.id]]}</strong>
                     </span>
                   ))
                 ) : (
-                  <span className="rounded-md bg-flag-wash px-2 py-1 text-xs text-flag">No access</span>
+                  <span className="chip text-flag" style={{ background: "var(--color-flag-wash)", boxShadow: "inset 0 0 0 1px #f6d4d6" }}>No access</span>
                 )}
               </div>
               <div className="flex items-center gap-1">
@@ -119,7 +127,7 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
             </li>
           ))}
         </ul>
-        {!users.length && <p className="border-t border-line px-5 py-8 text-center text-sm text-muted">No one else yet. Add the first person with the button above.</p>}
+        {!users.length && <p className="border-t border-line-soft px-5 py-10 text-center text-[0.8125rem] text-muted">No one else yet. Add the first person with the button above.</p>}
       </div>
 
       {editor && (
@@ -153,7 +161,7 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
 
 function Avatar({ name, muted }: { name: string; muted?: boolean }) {
   return (
-    <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-semibold", muted ? "bg-line text-muted" : "bg-brand/80 text-night")}>
+    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-[0.8125rem] font-semibold ring-2 ring-paper", muted ? "bg-line text-muted" : "bg-gradient-to-br from-[#2a2c33] to-night text-white")}>
       {name.trim().slice(0, 1).toUpperCase() || "?"}
     </span>
   );
@@ -166,7 +174,7 @@ function IconButton({ label, onClick, danger, children }: { label: string; onCli
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={cn("rounded-lg p-2 text-muted transition hover:bg-paper-2", danger ? "hover:bg-flag-wash hover:text-flag" : "hover:text-ink")}
+      className={cn("grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-paper-2", danger ? "hover:bg-flag-wash hover:text-flag" : "hover:text-ink")}
     >
       {children}
     </button>
@@ -208,11 +216,11 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
       <form onSubmit={save} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">Name</span>
+            <span className="label">Name</span>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} placeholder="e.g. Priya Sharma" className={input} />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">Username</span>
+            <span className="label">Username</span>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase())}
@@ -229,7 +237,7 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
 
         {!editing && (
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">
+            <span className="label">
               Password <span className="font-normal text-muted">(optional)</span>
             </span>
             <input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" placeholder="Leave blank and we'll make one for you" className={input} />
@@ -238,9 +246,9 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
         )}
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium">Access</legend>
-          <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-paper-2 p-3 text-sm">
-            <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#15171b]" />
+          <legend className="label mb-2">Access</legend>
+          <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-[#fafafa] p-3.5 text-[0.8125rem] transition hover:border-line-strong has-[:checked]:border-ink/25 has-[:checked]:bg-paper-2">
+            <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} className="mt-0.5 h-4 w-4" />
             <span>
               <strong className="flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4" /> Admin
@@ -248,11 +256,11 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
               <span className="text-xs text-muted">Manager on every portal, and can add people and see the activity log.</span>
             </span>
           </label>
-          <div className={cn("divide-y divide-line overflow-hidden rounded-xl border border-line", isAdmin && "pointer-events-none opacity-45")}>
+          <div className={cn("divide-y divide-line-soft overflow-hidden rounded-xl border border-line", isAdmin && "pointer-events-none opacity-45")}>
             {PROJECTS.map((p) => (
-              <label key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+              <label key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-[0.8125rem]">
                 <span className="flex items-center gap-2 font-medium">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.accent }} />
+                  <span className="h-2 w-2 rounded-[3px] ring-1 ring-black/10" style={{ background: p.accent }} />
                   {p.name}
                 </span>
                 <select
@@ -260,7 +268,7 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
                   onChange={(e) => setAccess((prev) => ({ ...prev, [p.id]: e.target.value }))}
                   disabled={isAdmin}
                   aria-label={`Access to ${p.name}`}
-                  className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm"
+                  className="field h-8 w-auto text-xs"
                 >
                   <option value="">No access</option>
                   {LEVELS.map((l) => (
@@ -275,8 +283,8 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
         </fieldset>
 
         {editing && (
-          <label className="flex cursor-pointer items-start gap-3 text-sm">
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#15171b]" />
+          <label className="flex cursor-pointer items-start gap-3 text-[0.8125rem]">
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="mt-0.5 h-4 w-4" />
             <span>
               <strong>Account active</strong>
               <span className="block text-xs text-muted">Untick to stop them signing in. Their notes stay.</span>
@@ -285,15 +293,15 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
         )}
 
         {error && (
-          <p role="alert" className="rounded-lg bg-flag-wash px-3 py-2 text-sm font-medium text-flag">
+          <p role="alert" className="rounded-lg bg-flag-wash px-3 py-2 text-[0.8125rem] font-medium text-flag ring-1 ring-[#f6d4d6]">
             {error}
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
             Cancel
           </button>
-          <button type="submit" disabled={pending} className="flex items-center gap-2 rounded-lg bg-night px-5 py-2 text-sm font-semibold text-white transition hover:bg-night-2 disabled:opacity-60">
+          <button type="submit" disabled={pending} className="btn btn-primary">
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             {editing ? "Save changes" : "Add person"}
           </button>
@@ -320,26 +328,26 @@ function ResetPassword({ user, onClose, onDone }: { user: UserRow; onClose: () =
 
   return (
     <Modal title={`Reset password for ${user.displayName}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4 text-sm">
+      <form onSubmit={submit} className="space-y-4 text-[0.8125rem]">
         <p className="text-ink-soft">
           They&rsquo;ll be signed out everywhere and asked to choose their own password next time they sign in.
         </p>
         <label className="block">
-          <span className="mb-1 block font-medium">
+          <span className="label">
             New password <span className="font-normal text-muted">(optional)</span>
           </span>
           <input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" placeholder="Leave blank and we'll make one for you" className={input} />
         </label>
         {error && (
-          <p role="alert" className="rounded-lg bg-flag-wash px-3 py-2 font-medium text-flag">
+          <p role="alert" className="rounded-lg bg-flag-wash px-3 py-2 font-medium text-flag ring-1 ring-[#f6d4d6]">
             {error}
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-line px-4 py-2 font-medium hover:border-ink">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
             Cancel
           </button>
-          <button type="submit" disabled={pending} className="flex items-center gap-2 rounded-lg bg-night px-5 py-2 font-semibold text-white transition hover:bg-night-2 disabled:opacity-60">
+          <button type="submit" disabled={pending} className="btn btn-primary">
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Reset password
           </button>
@@ -391,11 +399,11 @@ function CredentialsDialog({ credentials: c, onClose }: { credentials: Credentia
 
   return (
     <Modal title={c.heading} onClose={onClose}>
-      <div className="space-y-4 text-sm">
-        <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-amber-900">
+      <div className="space-y-4 text-[0.8125rem]">
+        <p className="rounded-lg bg-amber-50 px-3.5 py-2.5 text-amber-900 ring-1 ring-amber-200">
           <strong>Share this with {c.name} now.</strong> For safety the password is shown only this once and can&rsquo;t be looked up later (you can always reset it).
         </p>
-        <dl className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+        <dl className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
           {[
             ["Address", url],
             ["Username", c.username],
@@ -404,8 +412,8 @@ function CredentialsDialog({ credentials: c, onClose }: { credentials: Credentia
             <div key={label} className="flex items-center justify-between gap-3 px-4 py-2.5">
               <dt className="text-muted">{label}</dt>
               <dd className="flex min-w-0 items-center gap-2">
-                <code className="truncate rounded bg-paper-2 px-2 py-1 font-mono text-[0.85rem]">{value}</code>
-                <button type="button" onClick={() => copy(label, value)} aria-label={`Copy ${label}`} className="rounded p-1 text-muted hover:bg-paper-2 hover:text-ink">
+                <code className="truncate rounded-md bg-paper-2 px-2 py-1 font-mono text-[0.8rem] ring-1 ring-line-soft">{value}</code>
+                <button type="button" onClick={() => copy(label, value)} aria-label={`Copy ${label}`} className="rounded-md p-1 text-muted transition hover:bg-paper-2 hover:text-ink">
                   {copied === label ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
                 </button>
               </dd>
@@ -413,10 +421,10 @@ function CredentialsDialog({ credentials: c, onClose }: { credentials: Credentia
           ))}
         </dl>
         <div className="flex justify-between gap-2">
-          <button type="button" onClick={() => copy("all", all)} className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 font-medium hover:border-ink">
+          <button type="button" onClick={() => copy("all", all)} className="btn btn-secondary">
             {copied === "all" ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />} Copy all
           </button>
-          <button type="button" onClick={onClose} className="rounded-lg bg-night px-5 py-2 font-semibold text-white hover:bg-night-2">
+          <button type="button" onClick={onClose} className="btn btn-primary">
             Done
           </button>
         </div>

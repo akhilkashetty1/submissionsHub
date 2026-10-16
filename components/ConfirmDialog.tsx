@@ -49,16 +49,16 @@ export default function ConfirmDialog({
         e.preventDefault();
         if (!pending) onCancel();
       }}
-      className="m-auto w-[min(92vw,28rem)] rounded-2xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-night/60 backdrop:backdrop-blur-[2px]"
+      className="m-auto w-[min(92vw,28rem)] rounded-2xl border border-line bg-paper p-0 text-ink shadow-pop"
     >
       <div className="p-6">
         <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-flag-wash text-flag">
-            <Trash2 className="h-5 w-5" />
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-flag-wash text-flag ring-1 ring-[#f6d4d6]">
+            <Trash2 className="h-[1.1rem] w-[1.1rem]" />
           </span>
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold">{title}</h2>
-            <div className="mt-1.5 space-y-2 text-sm text-ink-soft">{children}</div>
+            <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+            <div className="mt-1.5 space-y-2 text-[0.8125rem] leading-relaxed text-ink-soft">{children}</div>
           </div>
         </div>
 
@@ -72,24 +72,24 @@ export default function ConfirmDialog({
               onChange={(e) => setTyped(e.target.value)}
               autoComplete="off"
               spellCheck={false}
-              className="w-full rounded-lg border border-line bg-paper-2 px-3 py-2 font-mono outline-none focus:border-flag"
+              className="field font-mono focus:border-flag focus:shadow-[0_0_0_3px_rgb(196_32_42/0.12)]"
             />
           </label>
         )}
 
         {error && (
-          <p role="alert" className="mt-4 rounded-lg bg-flag-wash px-3 py-2 text-sm font-medium text-flag">
+          <p role="alert" className="mt-4 rounded-lg bg-flag-wash px-3 py-2 text-[0.8125rem] font-medium text-flag ring-1 ring-[#f6d4d6]">
             {error}
           </p>
         )}
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="-mx-6 -mb-6 mt-6 flex justify-end gap-2 rounded-b-2xl border-t border-line-soft bg-[#fafafa] px-6 py-3.5">
           <button
             type="button"
             onClick={onCancel}
             disabled={pending}
             autoFocus
-            className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink disabled:opacity-60"
+            className="btn btn-secondary"
           >
             Cancel
           </button>
@@ -97,7 +97,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={!ready || pending}
-            className="flex items-center gap-2 rounded-lg bg-flag px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn btn-danger"
           >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             {confirmLabel}

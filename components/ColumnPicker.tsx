@@ -62,16 +62,16 @@ export default function ColumnPicker({
   const add = (c: string) => onChange([...columns, c]);
 
   return (
-    <aside role="dialog" aria-label="Choose columns" className="fixed inset-y-0 right-0 z-40 flex w-[min(26rem,100vw)] flex-col border-l border-line bg-paper shadow-[-20px_0_60px_-20px_rgba(15,17,21,0.35)]">
+    <aside role="dialog" aria-label="Choose columns" className="slide-in fixed inset-y-0 right-0 z-40 flex w-[min(26rem,100vw)] flex-col border-l border-line bg-paper shadow-[-24px_0_60px_-24px_rgba(15,17,21,0.28)] lg:inset-y-2 lg:right-2 lg:rounded-xl lg:border">
       <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
         <div>
-          <h2 className="text-lg font-semibold">Columns</h2>
+          <h2 className="text-base font-semibold tracking-tight">Columns</h2>
           <p className="mt-0.5 text-xs text-muted">
             Showing <strong className="text-ink">{columns.length}</strong> of {Math.max(available.length, columns.length)}. Changes apply to the table right away and are remembered for you.
           </p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-muted hover:bg-paper-2 hover:text-ink">
-          <X className="h-5 w-5" />
+        <button type="button" onClick={onClose} aria-label="Close" className="-mr-1.5 -mt-1 rounded-lg p-1.5 text-muted transition hover:bg-paper-2 hover:text-ink">
+          <X className="h-4 w-4" />
         </button>
       </header>
 
@@ -81,7 +81,7 @@ export default function ColumnPicker({
             <button
               type="button"
               onClick={() => onChange([...columns, ...flaggedToAdd])}
-              className="flex items-center gap-1.5 rounded-full bg-flag-wash px-3 py-1.5 text-xs font-semibold text-flag transition hover:brightness-95"
+              className="flex h-7 items-center gap-1.5 rounded-lg bg-flag-wash px-2.5 text-xs font-semibold text-flag ring-1 ring-[#f6d4d6] transition hover:brightness-[0.98]"
             >
               <TriangleAlert className="h-3.5 w-3.5" /> Add {flaggedToAdd.length} flagged column{flaggedToAdd.length === 1 ? "" : "s"}
             </button>
@@ -90,7 +90,7 @@ export default function ColumnPicker({
             type="button"
             onClick={() => onChange([...columns, ...remaining])}
             disabled={!remaining.length}
-            className="rounded-full border border-line px-3 py-1.5 text-xs font-medium hover:border-ink disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-secondary h-7 px-2.5 text-xs"
           >
             Show all
           </button>
@@ -98,7 +98,7 @@ export default function ColumnPicker({
             type="button"
             onClick={onReset}
             disabled={isDefault}
-            className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium hover:border-ink disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-secondary h-7 gap-1.5 px-2.5 text-xs"
           >
             <RotateCcw className="h-3 w-3" /> Default
           </button>
@@ -118,20 +118,20 @@ export default function ColumnPicker({
         </div>
         <label className="relative block">
           <span className="sr-only">Search columns</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
             ref={searchRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search all columns…"
-            className="w-full rounded-lg border border-line bg-paper-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-ink focus:bg-white"
+            className="field pl-9"
           />
         </label>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <section aria-label="Columns shown">
-          <h3 className="sticky top-0 z-10 bg-paper-2 px-5 py-2 text-[0.7rem] font-semibold uppercase tracking-wider text-muted">In your table · drag to reorder</h3>
+          <h3 className="eyebrow sticky top-0 z-10 border-b border-line-soft bg-[#fafafa]/95 px-5 py-2 backdrop-blur">In your table · drag to reorder</h3>
           <ul>
             {columns.map((c, i) =>
               !match(c) ? null : (
@@ -152,20 +152,20 @@ export default function ColumnPicker({
                     setDragFrom(null);
                     setDragOver(null);
                   }}
-                  className={cn("group flex items-center gap-2 border-b border-line/60 px-3 py-2 text-sm", dragOver === i && dragFrom !== i && "bg-brand/25", dragFrom === i && "opacity-40")}
+                  className={cn("group flex items-center gap-2 border-b border-line-soft px-3 py-2 text-[0.8125rem] transition-colors hover:bg-[#fafafa]", dragOver === i && dragFrom !== i && "bg-[#f8f9de]", dragFrom === i && "opacity-40")}
                 >
-                  <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted" aria-hidden />
+                  <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-faint" aria-hidden />
                   <span className="min-w-0 flex-1 break-words leading-snug" title={c}>
                     {c}
                   </span>
                   <span className="flex shrink-0 items-center opacity-60 group-hover:opacity-100">
-                    <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${c} earlier`} className="rounded p-1 hover:bg-paper-2 disabled:opacity-25">
+                    <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${c} earlier`} className="rounded-md p-1 text-muted hover:bg-paper-2 hover:text-ink disabled:opacity-25">
                       <ArrowUp className="h-3.5 w-3.5" />
                     </button>
-                    <button type="button" onClick={() => move(i, i + 1)} disabled={i === columns.length - 1} aria-label={`Move ${c} later`} className="rounded p-1 hover:bg-paper-2 disabled:opacity-25">
+                    <button type="button" onClick={() => move(i, i + 1)} disabled={i === columns.length - 1} aria-label={`Move ${c} later`} className="rounded-md p-1 text-muted hover:bg-paper-2 hover:text-ink disabled:opacity-25">
                       <ArrowDown className="h-3.5 w-3.5" />
                     </button>
-                    <button type="button" onClick={() => remove(c)} disabled={columns.length <= 1} aria-label={`Remove ${c}`} className="rounded p-1 hover:bg-flag-wash hover:text-flag disabled:opacity-25">
+                    <button type="button" onClick={() => remove(c)} disabled={columns.length <= 1} aria-label={`Remove ${c}`} className="rounded-md p-1 text-muted hover:bg-flag-wash hover:text-flag disabled:opacity-25">
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </span>
@@ -176,15 +176,15 @@ export default function ColumnPicker({
         </section>
 
         <section aria-label="More columns">
-          <h3 className="sticky top-0 z-10 bg-paper-2 px-5 py-2 text-[0.7rem] font-semibold uppercase tracking-wider text-muted">
+          <h3 className="eyebrow sticky top-0 z-10 border-b border-line-soft bg-[#fafafa]/95 px-5 py-2 backdrop-blur">
             More columns · {needle ? `${addable.length} match` : remaining.length}
           </h3>
           {addable.length ? (
             <ul>
               {addable.map((c) => (
                 <li key={c}>
-                  <button type="button" onClick={() => add(c)} className="flex w-full items-center gap-2 border-b border-line/60 px-3 py-2 text-left text-sm hover:bg-paper-2">
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand/60 text-night">
+                  <button type="button" onClick={() => add(c)} className="group flex w-full items-center gap-2 border-b border-line-soft px-3 py-2 text-left text-[0.8125rem] text-ink-soft transition-colors hover:bg-[#fafafa] hover:text-ink">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-paper-2 text-muted ring-1 ring-line transition group-hover:bg-ink group-hover:text-white group-hover:ring-ink">
                       <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </span>
                     <span className="min-w-0 flex-1 break-words leading-snug">{c}</span>

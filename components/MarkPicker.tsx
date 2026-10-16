@@ -58,7 +58,7 @@ export default function MarkPicker({
             style={{ backgroundColor: m.dot }}
             className={cn(
               "grid h-6 w-6 place-items-center rounded-full text-white transition hover:scale-110 disabled:opacity-60",
-              on ? (dark ? "ring-2 ring-white ring-offset-2 ring-offset-night" : "ring-2 ring-ink ring-offset-2") : "ring-1 ring-black/10",
+              on ? (dark ? "ring-2 ring-white ring-offset-2 ring-offset-night" : "ring-2 ring-ink ring-offset-2") : "ring-1 ring-inset ring-black/10",
             )}
           >
             {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}

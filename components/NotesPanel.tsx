@@ -55,14 +55,14 @@ export default function NotesPanel({
   };
 
   return (
-    <section className="rounded-2xl border border-line bg-paper shadow-sm" aria-labelledby="notes-h">
-      <h2 id="notes-h" className="flex items-center justify-between border-b border-line px-5 py-3.5 font-semibold">
+    <section className="card overflow-hidden" aria-labelledby="notes-h">
+      <h2 id="notes-h" className="section-title flex items-center justify-between border-b border-line px-5 py-3.5">
         Notes
-        <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-xs font-medium tabular-nums text-muted">{notes.length}</span>
+        <span className="chip tabular-nums">{notes.length}</span>
       </h2>
 
       {canWrite && (
-        <div className="border-b border-line p-4">
+        <div className="border-b border-line-soft bg-[#fcfcfc] p-4">
           <label htmlFor="new-note" className="sr-only">
             Add a note
           </label>
@@ -76,17 +76,17 @@ export default function NotesPanel({
             maxLength={MAX}
             rows={3}
             placeholder="Write a note: what you checked, who you spoke to, what happens next…"
-            className="w-full resize-y rounded-lg border border-line bg-paper-2 px-3 py-2.5 text-sm outline-none focus:border-ink focus:bg-white"
+            className="field resize-y"
           />
           <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="text-xs text-muted">
+            <span className="text-[0.6875rem] tabular-nums text-faint">
               {text.length}/{MAX} · Ctrl/⌘ + Enter to add
             </span>
             <button
               type="button"
               onClick={add}
               disabled={!text.trim() || pending}
-              className="flex items-center gap-2 rounded-lg bg-night px-4 py-2 text-sm font-semibold text-white transition hover:bg-night-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-primary btn-sm"
             >
               {pending && !confirmId ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />}
               Add note
@@ -96,21 +96,24 @@ export default function NotesPanel({
       )}
 
       {error && (
-        <p role="alert" className="mx-4 mt-4 rounded-lg bg-flag-wash px-3 py-2 text-sm font-medium text-flag">
+        <p role="alert" className="mx-4 mt-4 rounded-lg bg-flag-wash px-3 py-2 text-[0.8125rem] font-medium text-flag ring-1 ring-[#f6d4d6]">
           {error}
         </p>
       )}
 
       {notes.length ? (
-        <ul className="divide-y divide-line">
+        <ul className="divide-y divide-line-soft">
           {notes.map((n) => {
             const mine = n.authorId !== null && Number(n.authorId) === userId && userId !== 0;
             const deletable = canWrite && (mine || canManage);
             return (
-              <li key={n.id} className="px-5 py-3.5">
+              <li key={n.id} className="group/note px-5 py-3.5">
                 <div className="flex items-baseline justify-between gap-3 text-xs text-muted">
-                  <span>
-                    <strong className="font-semibold text-ink">{n.authorName}</strong> · {n.at}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-paper-2 text-[0.625rem] font-semibold text-ink-soft ring-1 ring-line">{n.authorName.trim().slice(0, 1).toUpperCase() || "?"}</span>
+                    <span className="truncate">
+                      <strong className="font-medium text-ink">{n.authorName}</strong> · {n.at}
+                    </span>
                   </span>
                   {deletable &&
                     (confirmId === n.id ? (
@@ -123,18 +126,18 @@ export default function NotesPanel({
                         </button>
                       </span>
                     ) : (
-                      <button type="button" onClick={() => setConfirmId(n.id)} aria-label="Delete note" className={cn("rounded p-1 hover:bg-flag-wash hover:text-flag")}>
+                      <button type="button" onClick={() => setConfirmId(n.id)} aria-label="Delete note" className={cn("rounded-md p-1 text-faint transition hover:bg-flag-wash hover:text-flag")}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     ))}
                 </div>
-                <p className="mt-1.5 whitespace-pre-wrap break-words text-sm">{n.body}</p>
+                <p className="mt-1.5 whitespace-pre-wrap break-words pl-7 text-[0.8125rem] leading-relaxed text-ink">{n.body}</p>
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="px-5 py-8 text-center text-sm text-muted">{canWrite ? "No notes yet. Add the first one above." : "No notes on this record."}</p>
+        <p className="px-5 py-8 text-center text-[0.8125rem] text-muted">{canWrite ? "No notes yet. Add the first one above." : "No notes on this record."}</p>
       )}
     </section>
   );

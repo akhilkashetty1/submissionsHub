@@ -14,9 +14,9 @@ export default function SidebarToggle() {
       title={`${label} ( [ )`}
       aria-label={label}
       aria-expanded={!collapsed}
-      className="hidden h-8 w-8 shrink-0 place-items-center rounded-lg text-[#8b919c] transition hover:bg-night-2 hover:text-white lg:grid"
+      className="hidden h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition hover:bg-paper-2 hover:text-ink lg:grid"
     >
-      {collapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
+      {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
     </button>
   );
 }
