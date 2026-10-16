@@ -29,3 +29,16 @@
   }
   ::selection { background: var(--color-brand); color: var(--color-night); }
 }
+
+/* Top navigation progress bar: crawls toward 85% while loading, then snaps to 100% and fades. */
+@keyframes navCrawl { from { width: 0; } to { width: 85%; } }
+@keyframes navFinish {
+  0% { width: 85%; opacity: 1; }
+  40% { width: 100%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+.nav-crawl { animation: navCrawl 12s cubic-bezier(0.08, 0.6, 0.2, 1) forwards; }
+.nav-finish { animation: navFinish 0.5s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .nav-crawl { animation: none; width: 70%; }
+}

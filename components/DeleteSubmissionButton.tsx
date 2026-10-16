@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { deleteSubmissions } from "@/app/actions";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { startNav } from "@/lib/nav-state";
 
 /** Delete this one submission, then go back to the list. */
 export default function DeleteSubmissionButton({ projectId, id, title }: { projectId: string; id: string; title: string }) {
@@ -18,6 +19,7 @@ export default function DeleteSubmissionButton({ projectId, id, title }: { proje
     start(async () => {
       const res = await deleteSubmissions(projectId, [id]);
       if (!res.ok) return setError(res.error);
+      startNav();
       router.push(`/p/${projectId}`);
       router.refresh();
     });

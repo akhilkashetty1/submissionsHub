@@ -1,8 +1,15 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** Shows a spinner on this item while its page is loading. Must sit inside the <Link>. */
+function Spinner() {
+  const { pending } = useLinkStatus();
+  return pending ? <Loader2 aria-label="Loading" className="h-3.5 w-3.5 shrink-0 animate-spin text-brand" /> : null;
+}
 
 export default function NavLink({ href, exact, children }: { href: string; exact?: boolean; children: React.ReactNode }) {
   const path = usePathname();
@@ -17,6 +24,7 @@ export default function NavLink({ href, exact, children }: { href: string; exact
       )}
     >
       {children}
+      <Spinner />
     </Link>
   );
 }

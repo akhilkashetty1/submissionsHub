@@ -88,6 +88,9 @@ plus optional `submittedAt` (ISO time) and `flagged` (header names to highlight)
   the choice across every page of the current search/date filter. Everything asks for confirmation,
   and deleting all matches makes you type `DELETE`. There is no undo, so export to Excel first if
   you might need the data. Deletes re-check the login on the server.
+- **Loading feedback:** a progress bar runs along the top the moment you click anything, the sidebar item you
+  clicked shows a spinner, every page has a skeleton screen, searching and paging dim the table, and Apply, Export and
+  Sign out show their own spinners. (`app/**/loading.tsx`, `components/NavProgress.tsx`, `lib/nav-state.ts`)
 - **Storage meter** (Overview): database size against `STORAGE_LIMIT_MB` (default 1024), so you know when to clear old entries.
 
 Login: 8 failed attempts from one IP lock it out for 15 minutes.

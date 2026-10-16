@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { LayoutGrid, LogOut } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { PROJECTS } from "@/lib/projects";
 import { projectStats } from "@/lib/submissions";
-import { logout } from "@/app/actions";
 import NavLink from "@/components/NavLink";
+import SignOutButton from "@/components/SignOutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand text-sm font-bold text-night">S</span>
             <span className="font-semibold text-white">Submissions Hub</span>
           </Link>
-          <form action={logout} className="lg:hidden">
-            <button className="flex items-center gap-1.5 text-xs text-[#8b919c] hover:text-white">
-              <LogOut className="h-4 w-4" /> Sign out
-            </button>
-          </form>
+          <SignOutButton formClassName="lg:hidden" className="flex items-center gap-1.5 text-xs text-[#8b919c] hover:text-white disabled:opacity-70" />
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0">
           {nav.map((n) => (
@@ -49,11 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <p className="truncate text-xs text-[#8b919c]">
             Signed in as <span className="text-white">{session.username}</span>
           </p>
-          <form action={logout}>
-            <button className="mt-2 flex items-center gap-1.5 text-sm text-[#8b919c] hover:text-white">
-              <LogOut className="h-4 w-4" /> Sign out
-            </button>
-          </form>
+          <SignOutButton formClassName="mt-2" className="flex items-center gap-1.5 text-sm text-[#8b919c] hover:text-white disabled:opacity-70" />
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 sm:px-8 sm:py-8">{children}</main>

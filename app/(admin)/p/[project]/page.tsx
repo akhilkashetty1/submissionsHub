@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Download, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { getProject } from "@/lib/projects";
 import { field, formatIST, listSubmissions } from "@/lib/submissions";
 import SubmissionsTable from "@/components/SubmissionsTable";
+import FilterBar from "@/components/FilterBar";
+import ExportButton from "@/components/ExportButton";
+import NavFade from "@/components/NavFade";
 
 const PAGE_SIZE = 50;
 
@@ -52,44 +55,16 @@ export default async function ProjectPage({ params, searchParams }: Props) {
             {filtered && " matching your filters"}
           </p>
         </div>
-        <a
+        <ExportButton
           href={`/api/export/${project.id}${qs({})}`}
-          className="flex items-center gap-2 rounded-lg bg-night px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-night-2"
-        >
-          <Download className="h-4 w-4" />
-          Export to Excel{filtered ? " (filtered)" : ""}
-        </a>
+          label={`Export to Excel${filtered ? " (filtered)" : ""}`}
+          className="flex items-center gap-2 rounded-lg bg-night px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-night-2 disabled:opacity-80"
+        />
       </header>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-paper p-4 shadow-sm" role="search">
-        <label className="min-w-[14rem] flex-1">
-          <span className="mb-1 block text-xs font-medium text-muted">Search any answer</span>
-          <span className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              name="q"
-              defaultValue={filters.q}
-              placeholder="Name, HQ, vehicle number, email…"
-              className="w-full rounded-lg border border-line bg-paper-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-ink focus:bg-white"
-            />
-          </span>
-        </label>
-        <label>
-          <span className="mb-1 block text-xs font-medium text-muted">From</span>
-          <input type="date" name="from" defaultValue={filters.from} className="rounded-lg border border-line bg-paper-2 px-3 py-2 text-sm" />
-        </label>
-        <label>
-          <span className="mb-1 block text-xs font-medium text-muted">To</span>
-          <input type="date" name="to" defaultValue={filters.to} className="rounded-lg border border-line bg-paper-2 px-3 py-2 text-sm" />
-        </label>
-        <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-night">Apply</button>
-        {filtered && (
-          <Link href={`/p/${project.id}`} className="flex items-center gap-1 px-2 py-2 text-sm text-muted hover:text-ink">
-            <X className="h-4 w-4" /> Clear
-          </Link>
-        )}
-      </form>
+      <FilterBar projectId={project.id} q={filters.q} from={filters.from} to={filters.to} filtered={filtered} />
 
+      <NavFade className="space-y-5">
       {rows.length ? (
         // Keyed so ticked rows reset when you change page or filters.
         <SubmissionsTable
@@ -132,6 +107,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
           </div>
         </nav>
       )}
+      </NavFade>
     </div>
   );
 }

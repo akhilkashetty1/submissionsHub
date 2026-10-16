@@ -117,11 +117,14 @@ const COLUMNS = `id::text, project, received_at, submitted_at, title, headers, "
 
 export async function listSubmissions(project: string, f: Filters, page: number, pageSize: number) {
   const w = where(project, f);
-  const [{ count }] = await query<{ count: string }>(`select count(*)::text as count from submissions where ${w.sql}`, w.params);
-  const rows = await query<Submission>(
-    `select ${COLUMNS} from submissions where ${w.sql} order by received_at desc, id desc limit $${w.params.length + 1} offset $${w.params.length + 2}`,
-    [...w.params, pageSize, (page - 1) * pageSize],
-  );
+  // Run both at once: one round trip to the database instead of two.
+  const [[{ count }], rows] = await Promise.all([
+    query<{ count: string }>(`select count(*)::text as count from submissions where ${w.sql}`, w.params),
+    query<Submission>(
+      `select ${COLUMNS} from submissions where ${w.sql} order by received_at desc, id desc limit $${w.params.length + 1} offset $${w.params.length + 2}`,
+      [...w.params, pageSize, (page - 1) * pageSize],
+    ),
+  ]);
   return { rows, total: Number(count) };
 }
 

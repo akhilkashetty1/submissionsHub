@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, TriangleAlert } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { getProject } from "@/lib/projects";
 import { formatIST, getSubmission } from "@/lib/submissions";
 import { cn } from "@/lib/utils";
 import DeleteSubmissionButton from "@/components/DeleteSubmissionButton";
+import ExportButton from "@/components/ExportButton";
 
 type Props = { params: Promise<{ project: string; id: string }> };
 
@@ -68,12 +69,11 @@ export default async function SubmissionPage({ params }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <a
+            <ExportButton
               href={`/api/export/${project.id}?id=${s.id}`}
-              className="flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium hover:border-ink"
-            >
-              <Download className="h-4 w-4" /> Excel
-            </a>
+              label="Excel"
+              className="flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium hover:border-ink disabled:opacity-70"
+            />
             <DeleteSubmissionButton projectId={project.id} id={s.id} title={s.title} />
           </div>
         </div>
