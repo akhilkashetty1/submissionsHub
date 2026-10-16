@@ -121,6 +121,14 @@ Colours and meanings live in `lib/marks.ts`; levels in `lib/permissions.ts`; por
 
 - **Overview:** totals, last 30 days and flagged counts per form, plus the latest entries.
 - **Per form:** search across every answer, a date range (India time), and pages of 50.
+- **Your own columns:** the table starts with a few key columns, but each form collects dozens. **Columns** opens a side panel
+  listing every field: search it, add with a click, drag to reorder, or press **Add N flagged columns** to pull in just the
+  questions someone got wrong on the page you're viewing. Your layout (columns, order and widths) is saved on the server per
+  person and per portal, so it follows you to any device; **Default** puts it back.
+- **Spreadsheet feel:** the grid scrolls sideways and down with the checkbox and Received columns and the heading row frozen,
+  edge shadows when there's more to see, drag a column edge to resize (double-click to reset), click a heading to sort
+  (numbers sort as numbers; click again to reverse, a third time to clear; it sorts across every page). Flagged answers show
+  in red inside the grid, and the flag and note counts sit in the frozen Received column. Click anywhere on a row to open it.
 - **Detail:** every field, remarks under their question, flagged answers in red.
 - **Export to Excel:** the current filter, or a single submission.
 - **Delete (permanent):** tick rows and press **Delete**, or use the Delete button on a submission.

@@ -93,6 +93,16 @@ const SCHEMA = `
     primary key (user_id, project)
   );
 
+  -- Each person's chosen columns and widths for each portal's table (user_id 0 = the owner account)
+  create table if not exists user_views (
+    user_id     bigint      not null,
+    project     text        not null,
+    columns     jsonb       not null default '[]',
+    widths      jsonb       not null default '{}',
+    updated_at  timestamptz not null default now(),
+    primary key (user_id, project)
+  );
+
   -- Who did what (deletes, user changes)
   create table if not exists activity_log (
     id       bigserial primary key,
@@ -111,7 +121,8 @@ async function migrate() {
     `select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'submissions' and column_name = 'mark_at')
         and to_regclass('public.activity_log') is not null
         and to_regclass('public.user_access') is not null
-        and to_regclass('public.submission_notes') is not null as ok`,
+        and to_regclass('public.submission_notes') is not null
+        and to_regclass('public.user_views') is not null as ok`,
   );
   if (rows[0]?.ok) return;
 

@@ -135,15 +135,37 @@ const cols = (alias = "submissions") =>
    ${alias}.mark, ${alias}.mark_by, ${alias}.mark_at,
    (select count(*)::int from submission_notes sn where sn.submission_id = ${alias}.id) as note_count`;
 
-export async function listSubmissions(project: string, f: Filters, page: number, pageSize: number) {
+/** Sort by the time received (RECEIVED) or by any column of the form, by its heading. */
+export type Sort = { col: string; dir: "asc" | "desc" };
+export const RECEIVED = "received";
+
+export async function listSubmissions(project: string, f: Filters, page: number, pageSize: number, sort?: Sort) {
   const w = where(project, f);
+  const params = [...w.params];
+  let join = "";
+  let orderBy = "received_at desc, id desc";
+
+  if (sort?.col === RECEIVED) {
+    const d = sort.dir === "asc" ? "asc" : "desc";
+    orderBy = `received_at ${d}, id ${d}`;
+  } else if (sort?.col) {
+    // Records store their answers as parallel header/value lists, so find this column's value by position.
+    // Numbers sort as numbers (2 before 10), everything else as case-insensitive text, empty cells last.
+    params.push(sort.col);
+    join = `left join lateral (
+      select vv.x as v from jsonb_array_elements_text(submissions.headers) with ordinality hh(k, i)
+      join jsonb_array_elements_text(submissions."values") with ordinality vv(x, j) on vv.j = hh.i
+      where hh.k = $${params.length} limit 1) sv on true`;
+    const d = sort.dir === "desc" ? "desc" : "asc";
+    orderBy = `(case when nullif(sv.v, '') ~ '^-?[0-9]{1,15}(\\.[0-9]+)?$' then nullif(sv.v, '')::numeric end) ${d} nulls last,
+               lower(nullif(sv.v, '')) ${d} nulls last, received_at desc, id desc`;
+  }
+
+  params.push(pageSize, (page - 1) * pageSize);
   // Run both at once: one round trip to the database instead of two.
   const [[{ count }], rows] = await Promise.all([
     query<{ count: string }>(`select count(*)::text as count from submissions where ${w.sql}`, w.params),
-    query<Submission>(
-      `select ${cols()} from submissions where ${w.sql} order by received_at desc, id desc limit $${w.params.length + 1} offset $${w.params.length + 2}`,
-      [...w.params, pageSize, (page - 1) * pageSize],
-    ),
+    query<Submission>(`select ${cols()} from submissions ${join} where ${w.sql} order by ${orderBy} limit $${params.length - 1} offset $${params.length}`, params),
   ]);
   return { rows, total: Number(count) };
 }

@@ -11,7 +11,27 @@ import { startNav } from "@/lib/nav-state";
  * Search + date filters. Submits without reloading the page, so Apply shows a spinner,
  * the progress bar runs and the table dims until the new results arrive.
  */
-export default function FilterBar({ projectId, q, from, to, mark, notes, filtered }: { projectId: string; q: string; from: string; to: string; mark: string; notes: string; filtered: boolean }) {
+export default function FilterBar({
+  projectId,
+  q,
+  from,
+  to,
+  mark,
+  notes,
+  sort,
+  dir,
+  filtered,
+}: {
+  projectId: string;
+  q: string;
+  from: string;
+  to: string;
+  mark: string;
+  notes: string;
+  sort: string;
+  dir: string;
+  filtered: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -24,6 +44,11 @@ export default function FilterBar({ projectId, q, from, to, mark, notes, filtere
       if (value) params.set(key, value);
     }
     if (data.get("notes")) params.set("notes", "1");
+    // Searching keeps your sort order.
+    if (sort) {
+      params.set("sort", sort);
+      params.set("dir", dir || "asc");
+    }
     const target = `/p/${projectId}${params.size ? `?${params}` : ""}`;
     const unchanged = target === `${location.pathname}${location.search}`;
     // Started outside the transition on purpose: updates inside a transition are deferred until it finishes.
