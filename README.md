@@ -121,6 +121,8 @@ Colours and meanings live in `lib/marks.ts`; levels in `lib/permissions.ts`; por
 
 - **Overview:** totals, last 30 days and flagged counts per form, plus the latest entries.
 - **Per form:** search across every answer, a date range (India time), and pages of 50.
+- **Collapsible menu:** the left menu folds into a slim icon rail (button beside the logo, or press `[`) to give wide tables
+  the room; it's remembered on that browser and phones always use the top bar.
 - **Your own columns:** the table starts with a few key columns, but each form collects dozens. **Columns** opens a side panel
   listing every field: search it, add with a click, drag to reorder, or press **Add N flagged columns** to pull in just the
   questions someone got wrong on the page you're viewing. Your layout (columns, order and widths) is saved on the server per
