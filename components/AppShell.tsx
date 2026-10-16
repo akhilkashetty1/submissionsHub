@@ -9,7 +9,7 @@ export const useSidebar = () => useContext(SidebarContext);
 
 /**
  * The page frame: menu on the left (a slim icon rail when collapsed, so wide tables get the room),
- * content on the right. Press [ to toggle. The choice is remembered for a year, on this browser.
+ * content on the right. Press [ to toggle. It starts open; a collapse lasts until the browser is closed.
  * Phones always use the top bar, so this only affects large screens.
  */
 export default function AppShell({ initialCollapsed, children }: { initialCollapsed: boolean; children: React.ReactNode }) {
@@ -18,7 +18,7 @@ export default function AppShell({ initialCollapsed, children }: { initialCollap
   const toggle = useCallback(() => {
     const next = !collapsed;
     setCollapsed(next);
-    document.cookie = `${SIDEBAR_COOKIE}=${next ? "collapsed" : "open"}; path=/; max-age=31536000; samesite=lax`;
+    document.cookie = `${SIDEBAR_COOKIE}=${next ? "collapsed" : "open"}; path=/; samesite=lax`; // session cookie: no max-age
   }, [collapsed]);
 
   useEffect(() => {

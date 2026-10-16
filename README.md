@@ -299,7 +299,8 @@ How it is enforced (all in code, not just hidden buttons):
   highlight + who set it, notes, row colours, flagged cells in red.
 - **People & access / Activity log** (admins), **Account** (everyone: change own password).
 - **Navigation feel:** progress bar on every click, skeleton screens, spinners; the left menu collapses to an
-  icon rail (button beside the logo, or `[`), remembered in the `hub_sidebar` cookie that the server reads.
+  icon rail (button in the top bar, or `[`). It starts open on every visit; a collapse is remembered until the
+  browser is closed, in the `hub_sidebar_session` cookie that the server reads.
 
 ## 10. Code map
 
