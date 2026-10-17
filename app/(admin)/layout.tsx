@@ -1,3 +1,4 @@
+import Logo from "@/components/Logo";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { History, LayoutGrid, ShieldCheck, UserCog, Users } from "lucide-react";
@@ -43,9 +44,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <aside className="flex min-w-0 flex-col overflow-hidden border-b border-line bg-canvas text-ink-soft lg:sticky lg:top-0 lg:h-dvh lg:border-b-0">
         <div className="flex items-center justify-between gap-3 px-4 py-3 lg:h-14 lg:px-4 lg:py-0 lg:group-data-[collapsed=true]/side:justify-center lg:group-data-[collapsed=true]/side:px-2">
           <Link href="/" title="Submissions Hub" className="flex min-w-0 items-center gap-2.5 rounded-lg">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[0.5rem] bg-night text-[0.8rem] font-bold text-brand shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(0_0_0/0.25)]">
-              S
-            </span>
+            <Logo size={28} className="shrink-0" />
             <span className={`truncate whitespace-nowrap text-[0.875rem] font-semibold tracking-[-0.01em] text-ink ${railHide}`}>Submissions Hub</span>
           </Link>
           <SignOutButton formClassName="lg:hidden" className="btn btn-ghost btn-sm" />

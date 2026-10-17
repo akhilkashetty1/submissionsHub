@@ -1,3 +1,4 @@
+import Logo from "@/components/Logo";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
@@ -15,7 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="grid min-h-dvh bg-paper lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <section className="flex flex-col px-6 py-8 sm:px-12">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-[0.6rem] bg-night text-sm font-bold text-brand shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(0_0_0/0.25)]">S</span>
+          <Logo size={32} />
           <span className="text-[0.9375rem] font-semibold tracking-[-0.01em]">Submissions Hub</span>
         </div>
 
