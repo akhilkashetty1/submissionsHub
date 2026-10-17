@@ -1,4 +1,4 @@
-import { Bike, CarFront, FileText, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Bike, CarFront, FileText, Globe, ShieldCheck, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** One icon per portal, by id. Anything new falls back to a document. */
@@ -6,6 +6,7 @@ const ICONS: Record<string, LucideIcon> = {
   "2w": Bike,
   "4w": CarFront,
   roadshield: ShieldCheck,
+  "site:roadshield": Globe,
 };
 
 const SIZES = {

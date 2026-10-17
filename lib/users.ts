@@ -1,7 +1,6 @@
 import "server-only";
 import { query, transaction } from "@/lib/db";
-import { isLevel, type Level } from "@/lib/permissions";
-import { PROJECTS } from "@/lib/projects";
+import { ACCESS_AREAS, isLevel, type Level } from "@/lib/permissions";
 
 export type DbUser = {
   id: number;
@@ -29,7 +28,7 @@ const SELECT = `
 /** Only known portals and valid levels survive, whatever was sent. */
 function cleanAccess(access: Record<string, unknown>) {
   const out: Record<string, Level> = {};
-  for (const p of PROJECTS) {
+  for (const p of ACCESS_AREAS) {
     const level = access?.[p.id];
     if (isLevel(level)) out[p.id] = level;
   }

@@ -7,8 +7,7 @@ import { createUserAction, deleteUserAction, resetPasswordAction, updateUserActi
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Modal from "@/components/Modal";
 import PortalIcon from "@/components/PortalIcon";
-import { LEVELS, LEVEL_HELP, LEVEL_LABEL, type Level } from "@/lib/permissions";
-import { PROJECTS } from "@/lib/projects";
+import { ACCESS_AREAS, LEVELS, LEVEL_HELP, LEVEL_LABEL, type Level } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 export type UserRow = {
@@ -65,7 +64,7 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
         <p className="flex items-center gap-2 border-t border-line-soft bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
           <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-ink-soft" />
           <span>
-            <strong className="font-medium text-ink">Admins</strong> have Manager on every portal and also manage people here and see the activity log.
+            <strong className="font-medium text-ink">Admins</strong> have Manager on every portal and website, and also manage people here and see the activity log. On a website, Contributors edit drafts and Managers publish.
           </span>
         </p>
       </section>
@@ -103,8 +102,8 @@ export default function UsersManager({ users, ownerName }: { users: UserRow[]; o
               <div className="flex flex-wrap gap-1.5">
                 {u.isAdmin ? (
                   <span className="chip">All portals · Manager</span>
-                ) : PROJECTS.some((p) => u.access[p.id]) ? (
-                  PROJECTS.filter((p) => u.access[p.id]).map((p) => (
+                ) : ACCESS_AREAS.some((p) => u.access[p.id]) ? (
+                  ACCESS_AREAS.filter((p) => u.access[p.id]).map((p) => (
                     <span key={p.id} className="chip">
                       <PortalIcon id={p.id} accent={p.accent} size="xs" />
                       {p.short} · <strong className="font-semibold text-ink">{LEVEL_LABEL[u.access[p.id]]}</strong>
@@ -258,11 +257,12 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
             </span>
           </label>
           <div className={cn("divide-y divide-line-soft overflow-hidden rounded-xl border border-line", isAdmin && "pointer-events-none opacity-45")}>
-            {PROJECTS.map((p) => (
+            {ACCESS_AREAS.map((p) => (
               <label key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-[0.8125rem]">
                 <span className="flex items-center gap-2 font-medium">
                   <PortalIcon id={p.id} accent={p.accent} size="xs" />
                   {p.name}
+                  {p.kind === "site" && <span className="rounded-full bg-paper-2 px-1.5 py-0.5 text-[0.625rem] font-medium text-muted ring-1 ring-line">Photos</span>}
                 </span>
                 <select
                   value={isAdmin ? "manage" : (access[p.id] ?? "")}
@@ -274,7 +274,7 @@ function UserEditor({ user, onClose, onCreated }: { user: UserRow | null; onClos
                   <option value="">No access</option>
                   {LEVELS.map((l) => (
                     <option key={l} value={l}>
-                      {LEVEL_LABEL[l]}: {LEVEL_HELP[l].toLowerCase()}
+                      {LEVEL_LABEL[l]}: {p.help[l].toLowerCase()}
                     </option>
                   ))}
                 </select>

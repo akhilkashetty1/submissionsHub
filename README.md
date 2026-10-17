@@ -25,6 +25,7 @@ highlight, annotate, export and (if allowed) delete them. It replaces working ou
 13. [Developing and testing](#13-developing-and-testing)
 14. [Decisions, gotchas and known limits](#14-decisions-gotchas-and-known-limits)
 15. [Related projects and history](#15-related-projects-and-history)
+16. [Website photos (RoadShield)](#16-website-photos-roadshield)
 
 ---
 
@@ -160,6 +161,9 @@ hub (the project logs it, and still saves to its other channels).
 | `SESSION_SECRET` | yes | ≥ 32 random chars; signs the session cookie. **Changing it signs everyone out.** |
 | `INGEST_KEY_2W` / `INGEST_KEY_4W` / `INGEST_KEY_ROADSHIELD` | yes | One secret per project (≥ 24 chars) |
 | `STORAGE_LIMIT_MB` | no | Plan storage limit for the Overview meter (default 1024) |
+| `SITE_URL_ROADSHIELD` | for website photos | The RoadShield site's address, e.g. `https://road-shield.in` (no trailing slash). Section 16 |
+| `SITE_SECRET_ROADSHIELD` | for website photos | ≥ 16 random chars, the same value as RoadShield's `SITE_REVALIDATE_SECRET` |
+| `BLOB_READ_WRITE_TOKEN` | for uploads | Set automatically when a **public** Vercel Blob store is connected to the hub project. Without it, uploads fail on Vercel (locally they go to `.local-uploads/`) |
 | `INGEST_ORIGINS_2W` | no | Allows browsers on those site addresses to post to the 2W endpoint with **no key**, rate-limited. Not needed: 2W now posts from its own server. Leave empty. |
 
 **On each sending project:** `HUB_INGEST_URL`, `HUB_INGEST_KEY` (section 4). They also keep their own
@@ -184,7 +188,10 @@ collide (this works through Neon's connection pooler).
 | `user_access` | `(user_id, project, level)` with level `read` / `write` / `manage`. |
 | `user_views` | Each person's saved table columns and widths per portal (`user_id` 0 = owner). |
 | `cell_marks` | Colour on a single value: `(submission_id, col)` primary key (**cascades on delete**), `mark`, `mark_by`, `mark_at`. `col` must be one of the record's own headings. |
-| `activity_log` | Audit trail: deletes and user changes. |
+| `activity_log` | Audit trail: deletes, user changes, website publishes. |
+| `site_media` | Website photos uploaded here: `site`, Blob `url` + `storage_key`, `w`/`h`/`bytes`, uploader. The files live in Vercel Blob, never in the database. |
+| `site_slots` | One row per photo spot (`site`, `slot`): `draft` and `published` (jsonb `{layout?, items:[{src, alt, w, h, label, position, media?}]}`). `published` null = the site shows its built-in photos. |
+| `site_manifests` | The last list of photo spots each site reported (so the editor opens if the site is briefly down). |
 | `ingest_log`, `login_failures` | Rate-limit bookkeeping (kept small; old rows are pruned). |
 
 **When you add a table or column:** add the idempotent statement to `SCHEMA` in `lib/db.ts` **and** extend the
@@ -316,6 +323,11 @@ app/
   api/ingest/[project]/          how projects send data in (key auth)
   api/export/[project]/          Excel export (session + read access)
   api/health/                    setup check
+  (admin)/(app)/site/[site]/     website photo editor (layout = access gate)
+  api/site/[site]/               public feed of published photos (read by the site)
+  api/site/[site]/upload/        photo upload (Contributor+): re-encoded to WebP with sharp, stored in Blob
+  api/site-file/[name]/          serves local uploads in development only
+  site-actions.ts                save draft, discard, publish, delete unused photo
   actions.ts                     login, logout, delete records
   record-actions.ts              highlight, notes
   user-actions.ts                create/edit/reset/delete people, change own password
@@ -332,6 +344,10 @@ lib/
   users.ts · password.ts         people and scrypt/password helpers
   views.ts                       saved columns, available columns
   marks.ts · format.ts · sidebar.ts · nav-state.ts · activity.ts · utils.ts
+  sites.ts                       the websites (browser-safe types, access id `site:<id>`)
+  site-photos.ts                 manifest fetch, drafts, publish + refresh, library, clean-up, public feed
+  site-storage.ts                Vercel Blob (or local disk in dev)
+  image-prep.ts                  browser-side shrink before upload
 scripts/                         generate-secrets.mjs · hash-password.mjs
 ```
 
@@ -350,6 +366,9 @@ scripts/                         generate-secrets.mjs · hash-password.mjs
 | Change the highlight colours/meanings | `lib/marks.ts` (ids are stored in the database; renaming an id orphans existing marks, so change labels/colours only) |
 | Clear test entries | Portal table → tick → Delete (Manager+) |
 | Free up space | Export to Excel first, then delete old entries; watch the Overview meter |
+| Change website photos | Sidebar → RoadShield site photos → edit (autosaves as a draft) → a Manager presses **Publish**. Section 16 |
+| Give someone website access | People & access → pencil → "RoadShield website": Viewer sees, Contributor edits drafts, Manager publishes |
+| Make another spot on RoadShield editable | Only in the RoadShield repo: add a slot to `lib/photo-slots.ts` and read it with `slotPhotos(key)`. The hub picks it up automatically |
 | Upgrade dependencies | `npm audit --omit=dev`; Next.js was moved to 16.4.1 for security fixes. Keep `pg` and `exceljs` in `serverExternalPackages` (`next.config.ts`) |
 
 ## 12. Troubleshooting
@@ -390,7 +409,12 @@ Commands: `npm run dev` (port 3400) · `npm run build` · `npm run lint` · `npx
 6. checks highlights, notes (including note search, author-only delete), bulk operations, deletes cascade, saved
    layouts are per person and cleaned (widths clamped, junk dropped, ≤ 300 columns), and sort values with SQL
    injection strings are harmless.
-That suite had 125 checks, all passing at the last release. UI behaviour (loaders, column panel, resize, sort,
+That suite had 125 checks, all passing at the last release. A second suite (47 checks) covers website photos:
+who can open/save/upload/publish/delete, draft validation (unknown spots, foreign photo addresses, another site's
+photos, too many photos, bad focus points/layouts), publish blocked for incomplete frames or missing descriptions,
+drafts never in the public feed, non-images and oversize uploads refused, clean-up of unused uploads, and the
+site's refresh endpoint secret. RoadShield was also tested as a production build: Publish → visible on the next
+visit, and with the hub switched off the site kept serving the last published photos (HTTP 200, never defaults or errors). UI behaviour (loaders, column panel, resize, sort,
 sticky columns, collapsible menu, phone layout) was checked in a real browser, including at 375 px width.
 
 **Gotchas when working on this code:**
@@ -411,6 +435,8 @@ sticky columns, collapsible menu, phone layout) was checked in a real browser, i
 - **Server action ids differ in production builds**; the dev-bundle discovery trick above only works with `next dev`.
 - Don't run `next build` while `next dev` is running in the same folder (they share `.next`).
 - `AGENTS.md` is regenerated by `next dev` and is git-ignored.
+- **Restarting `next dev` while a browser tab has the hub open** can leave that tab reloading in a loop (every
+  page, every second). Close the tab, restart the server, then open it again.
 
 ## 14. Decisions, gotchas and known limits
 
@@ -444,3 +470,61 @@ sticky columns, collapsible menu, phone layout) was checked in a real browser, i
 Timeline in short: hub built → added to Vercel with Neon → 2W moved off Render to Vercel (domain switched) → 3 projects
 connected → multi-user access, highlights and notes → spreadsheet-style table with chosen columns → collapsible menu.
 Google Sheets and Brevo email remain as parallel channels in each project.
+
+## 16. Website photos (RoadShield)
+
+Admins change the photos on the RoadShield website from here: the Gallery page (four sections, each with a
+choice of layout), the Ride Smart and Drive Smart page heroes, their "Real bikes / Real cars" six-photo frames
+and campaign creatives, the home page hero slideshows and mosaic, the classroom photos and Fleet Maintenance.
+
+**How it fits together**
+
+```
+RoadShield (Next.js)                                   Hub
+lib/photo-slots.ts  ── /api/site-manifest ───────────▶ editor: what spots exist, their rules, built-in photos
+  each spot's built-in photos (the defaults)            drafts autosave in site_slots.draft
+                                                       Publish (Manager) → site_slots.published
+pages ◀── HUB_SITE_URL = /api/site/roadshield ─────────  public feed: published photos only
+      ◀── POST /api/site-revalidate (secret) ──────────  then the hub opens each changed page once
+photos: Vercel Blob (uploaded here) or the site's own /images/… files
+```
+
+- **The site describes itself.** Each photo spot ("slot") is listed in RoadShield's `lib/photo-slots.ts` with its
+  rules (gallery = any number + layout; set = a range, e.g. 1–8; fixed = exactly N in a set design), how it crops,
+  what each position means, and its built-in photos. The hub reads that list; nothing about RoadShield's pages is
+  hard-coded here. Making a new spot editable is a RoadShield-only change.
+- **It can't break the site.** RoadShield shows its built-in photos when `HUB_SITE_URL` isn't set, when a spot has
+  never been published, or when published photos don't fit the spot. Pages are static with a 1-hour safety refresh;
+  Publish triggers an immediate refresh (stale-while-revalidate), and the hub then opens each changed page so the
+  next visitor sees the new photos. If the hub is unreachable during a refresh, the site keeps serving the last
+  good page.
+- **Drafts vs live.** Every edit autosaves as a draft (Contributor). Nothing changes on the site until a Manager
+  presses Publish, which puts every changed spot live at once. Publish is refused (and nothing changes) while a
+  fixed frame doesn't have its exact number of photos or a photo has no description. "Discard draft" goes back to
+  what's live; "Site's originals" goes back to the built-in photos.
+- **Uploads.** The browser shrinks photos (≤ 2400 px, WebP) to stay under Vercel's 4.5 MB request limit; the hub
+  then decodes and re-encodes every upload with `sharp` (upright, ≤ 2400 px, WebP q82, camera data/location
+  stripped), so only real images are stored. Typical size is 150–400 KB.
+- **Storage.** Photos go to a **public Vercel Blob** store connected to the hub project; only their details are in
+  Postgres. Blob's free allowance is separate from the database's. Uploads that nothing uses (removed from every
+  draft and not live) are deleted automatically a day later, when someone next publishes; the Photo library also
+  lets people delete unused uploads straight away. The site's own built-in photos are never deleted.
+- **Editor features:** drag files onto a spot or use Add photos; drag (or arrows) to reorder; click a photo to
+  write its description, set its label/caption and click its **focus point** (with a live crop preview); replace
+  from an upload or the library; per-gallery layout (Masonry, Even grid, Featured, Carousel) and 2/3/4 columns,
+  with a scaled-down preview. Viewers see everything read-only.
+
+**Setting it up on Vercel (one time)**
+
+1. Hub project → **Storage → Create → Blob**, access **Public**, connect it to the hub project (adds
+   `BLOB_READ_WRITE_TOKEN`).
+2. Generate a secret (`openssl rand -hex 24`). Hub: `SITE_URL_ROADSHIELD` = the RoadShield address,
+   `SITE_SECRET_ROADSHIELD` = the secret. RoadShield: `HUB_SITE_URL` = `https://<hub>/api/site/roadshield`,
+   `SITE_REVALIDATE_SECRET` = the same secret.
+3. Redeploy both. Give people access under People & access → "RoadShield website".
+
+**Local development:** run RoadShield (`npm run dev`, port 3200) with `HUB_SITE_URL=http://localhost:3400/api/site/roadshield`
+and `SITE_REVALIDATE_SECRET`, and the hub with `SITE_URL_ROADSHIELD=http://localhost:3200` and
+`SITE_SECRET_ROADSHIELD`. Without a Blob token the hub stores uploads in `.local-uploads/` (git-ignored) and
+serves them from `/api/site-file/…`; RoadShield allows `localhost:3400` images only in development.
+

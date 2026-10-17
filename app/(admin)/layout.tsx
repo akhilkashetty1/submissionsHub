@@ -3,7 +3,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { History, LayoutGrid, ShieldCheck, UserCog, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { LEVEL_LABEL, levelFor, visibleProjects } from "@/lib/permissions";
+import { LEVEL_LABEL, levelFor, visibleProjects, visibleSites } from "@/lib/permissions";
+import { siteAccessId } from "@/lib/sites";
 import { projectStats } from "@/lib/submissions";
 import AppShell from "@/components/AppShell";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
@@ -21,6 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Pages enforce the password change; the layout must still render for the Account page that asks for it.
   const user = await requireUser({ allowMustChange: true });
   const projects = visibleProjects(user);
+  const sites = visibleSites(user);
   const stats = user.mustChangePassword ? {} : await projectStats();
   const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
 
@@ -63,6 +65,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               {n.icon}
               <span className={`truncate whitespace-nowrap ${railHide}`}>{n.label}</span>
               {n.count != null && <span className={`ml-auto pl-2 text-[0.6875rem] font-medium tabular-nums text-faint ${railHide}`}>{n.count.toLocaleString("en-IN")}</span>}
+            </NavLink>
+          ))}
+
+          {sites.length > 0 && <p className={sectionLabel}>Website</p>}
+          {sites.length > 0 && <div aria-hidden className={railDivider} />}
+          {sites.map((s) => (
+            <NavLink key={s.id} href={`/site/${s.id}`} title={`${s.name} photos`}>
+              <PortalIcon id={siteAccessId(s.id)} accent={s.accent} />
+              <span className={`truncate whitespace-nowrap ${railHide}`}>{s.short} photos</span>
             </NavLink>
           ))}
 

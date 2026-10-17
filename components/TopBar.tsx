@@ -5,10 +5,13 @@ import { usePathname } from "next/navigation";
 import { ChevronRight, Clock } from "lucide-react";
 import PortalIcon from "@/components/PortalIcon";
 import SidebarToggle from "@/components/SidebarToggle";
+import { SITES } from "@/lib/sites";
 
 type Crumb = { label: string; href?: string; portal?: { id: string; accent: string } };
 
 /** Where you are, worked out from the address. Large screens only (phones have the top menu). */
+const SITE_NAMES: Record<string, string> = Object.fromEntries(SITES.map((s) => [s.id, s.name]));
+
 function crumbsFor(path: string, portals: Record<string, { name: string; accent: string }>): Crumb[] {
   const parts = path.split("/").filter(Boolean);
   if (!parts.length) return [{ label: "Overview" }];
@@ -17,6 +20,7 @@ function crumbsFor(path: string, portals: Record<string, { name: string; accent:
     const portal: Crumb = { label: p?.name ?? parts[1], href: `/p/${parts[1]}`, portal: p ? { id: parts[1], accent: p.accent } : undefined };
     return parts[2] ? [portal, { label: `#${parts[2]}` }] : [{ ...portal, href: undefined }];
   }
+  if (parts[0] === "site") return [{ label: "Website" }, { label: SITE_NAMES[parts[1]] ?? parts[1] }];
   if (parts[0] === "users") return [{ label: "Admin" }, { label: "People & access" }];
   if (parts[0] === "activity") return [{ label: "Admin" }, { label: "Activity log" }];
   if (parts[0] === "account") return [{ label: "Account" }];

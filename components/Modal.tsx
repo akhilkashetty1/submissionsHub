@@ -10,11 +10,14 @@ export default function Modal({
   onClose,
   children,
   wide,
+  width,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  /** Any CSS width, for dialogs bigger than `wide`. */
+  width?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -34,7 +37,7 @@ export default function Modal({
       className={cn(
         "m-auto max-h-[92dvh] w-[min(94vw,var(--w))] overflow-y-auto rounded-2xl border border-line bg-paper p-0 text-ink shadow-pop",
       )}
-      style={{ "--w": wide ? "40rem" : "28rem" } as React.CSSProperties}
+      style={{ "--w": width ?? (wide ? "40rem" : "28rem") } as React.CSSProperties}
     >
       <div className="flex items-center justify-between gap-4 border-b border-line px-6 py-4">
         <h2 className="text-base font-semibold tracking-tight">{title}</h2>

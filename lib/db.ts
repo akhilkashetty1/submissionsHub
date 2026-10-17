@@ -123,6 +123,41 @@ const SCHEMA = `
     detail   jsonb       not null default '{}'
   );
   create index if not exists activity_log_at on activity_log (at desc);
+
+  -- Website photos (sidebar → Website). Files live in Vercel Blob; only their details are here.
+  create table if not exists site_media (
+    id          bigserial primary key,
+    site        text        not null,
+    url         text        not null,
+    storage_key text        not null,
+    w           integer     not null,
+    h           integer     not null,
+    bytes       integer     not null,
+    name        text        not null default '',
+    created_by  text,
+    created_at  timestamptz not null default now()
+  );
+  create index if not exists site_media_site on site_media (site, created_at desc);
+
+  -- Each photo spot on a site: the draft being edited and what's live (null = the site's own photos)
+  create table if not exists site_slots (
+    site          text        not null,
+    slot          text        not null,
+    draft         jsonb,
+    published     jsonb,
+    updated_by    text,
+    updated_at    timestamptz,
+    published_by  text,
+    published_at  timestamptz,
+    primary key (site, slot)
+  );
+
+  -- The last list of photo spots each site reported, so editing works while the site is briefly down
+  create table if not exists site_manifests (
+    site        text        primary key,
+    manifest    jsonb       not null,
+    fetched_at  timestamptz not null default now()
+  );
 `;
 
 async function migrate() {
@@ -133,7 +168,10 @@ async function migrate() {
         and to_regclass('public.user_access') is not null
         and to_regclass('public.submission_notes') is not null
         and to_regclass('public.user_views') is not null
-        and to_regclass('public.cell_marks') is not null as ok`,
+        and to_regclass('public.cell_marks') is not null
+        and to_regclass('public.site_slots') is not null
+        and to_regclass('public.site_media') is not null
+        and to_regclass('public.site_manifests') is not null as ok`,
   );
   if (rows[0]?.ok) return;
 

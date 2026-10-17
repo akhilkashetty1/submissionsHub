@@ -5,6 +5,7 @@ import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { can, type AppUser, type Level } from "@/lib/permissions";
 import { getProject, type Project } from "@/lib/projects";
+import { getSite, siteAccessId, type Site } from "@/lib/sites";
 import { safeEqual } from "@/lib/password";
 import { getUserById } from "@/lib/users";
 
@@ -112,4 +113,12 @@ export async function requireProjectAccess(projectId: string, need: Level = "rea
 export async function clientIp() {
   const h = await headers();
   return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+}
+
+/** For website pages: the site must exist and the person needs at least `need` on it, else "not found". */
+export async function requireSiteAccess(siteId: string, need: Level = "read"): Promise<{ user: AppUser; site: Site }> {
+  const user = await requireUser();
+  const site = getSite(siteId);
+  if (!site || !can(user, siteAccessId(site.id), need)) notFound();
+  return { user, site };
 }

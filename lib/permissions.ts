@@ -1,4 +1,5 @@
 import { PROJECTS, type Project } from "@/lib/projects";
+import { SITES, SITE_LEVEL_HELP, siteAccessId, type Site } from "@/lib/sites";
 
 /**
  * Who can do what. Access is set per person, per portal:
@@ -58,4 +59,15 @@ export function can(user: Pick<AppUser, "isAdmin" | "access">, projectId: string
 
 export function visibleProjects(user: Pick<AppUser, "isAdmin" | "access">): Project[] {
   return PROJECTS.filter((p) => levelFor(user, p.id) !== null);
+}
+
+/** Everything access can be given to: the form portals, then the websites. */
+export type AccessArea = { id: string; name: string; short: string; accent: string; kind: "portal" | "site"; help: Record<Level, string> };
+export const ACCESS_AREAS: AccessArea[] = [
+  ...PROJECTS.map((p) => ({ id: p.id, name: p.name, short: p.short, accent: p.accent, kind: "portal" as const, help: LEVEL_HELP })),
+  ...SITES.map((s) => ({ id: siteAccessId(s.id), name: s.name, short: s.short, accent: s.accent, kind: "site" as const, help: SITE_LEVEL_HELP })),
+];
+
+export function visibleSites(user: Pick<AppUser, "isAdmin" | "access">): Site[] {
+  return SITES.filter((s) => levelFor(user, siteAccessId(s.id)) !== null);
 }

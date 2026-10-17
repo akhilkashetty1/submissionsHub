@@ -5,7 +5,7 @@ import { logActivity } from "@/lib/activity";
 import { clientIp, getCurrentUser, startSession } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { generatePassword, hashPassword, passwordProblem, verifyPassword } from "@/lib/password";
-import { PROJECTS } from "@/lib/projects";
+import { ACCESS_AREAS } from "@/lib/permissions";
 import { createUser, deleteUser, getUserById, getUserByUsername, setOwnPassword, setPassword, updateUser } from "@/lib/users";
 import type { Result } from "@/app/record-actions";
 
@@ -16,7 +16,7 @@ type UserInput = { displayName: string; isAdmin: boolean; active?: boolean; acce
 const cleanName = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, 60) : "");
 
 function describeAccess(access: Record<string, unknown>) {
-  return Object.fromEntries(PROJECTS.filter((p) => access?.[p.id]).map((p) => [p.id, access[p.id]]));
+  return Object.fromEntries(ACCESS_AREAS.filter((p) => access?.[p.id]).map((p) => [p.id, access[p.id]]));
 }
 
 /** Add a person. Leave the password blank to have one generated; it's shown once, and they must change it at first sign-in. */
