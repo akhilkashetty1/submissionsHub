@@ -133,7 +133,7 @@ Each project's server posts to the hub with its own secret. A key can only write
 
 | Project (repo) | `HUB_INGEST_URL` | `HUB_INGEST_KEY` (value of the hub's…) | Sends |
 |---|---|---|---|
-| 2W (`rideAlong2w`, site `ride-along-form.in`) | `https://submissions-hub.vercel.app/api/ingest/2w` | `INGEST_KEY_2W` | `{ fields: {…} }` (the form's flat answers) |
+| 2W (`rideAlong2w`, site `ride-along-form.in`) | `https://submissions-hub.vercel.app/api/ingest/2w` | `INGEST_KEY_2W` | `{ fields: {…}, flagged, submittedAt }` (the form's flat answers; `flagged` lists the headings of answers that need follow-up, so 2W records show red flags like 4W's; older 2W records have none) |
 | 4W (`rideAlong4w`) | `https://submissions-hub.vercel.app/api/ingest/4w` | `INGEST_KEY_4W` | `{ headers, values, submittedAt, flagged }` |
 | RoadShield (`roadshield1`, `www.road-shield.in`) | `https://submissions-hub.vercel.app/api/ingest/roadshield` | `INGEST_KEY_ROADSHIELD` | `{ headers, values }` |
 
@@ -463,7 +463,7 @@ sticky columns, collapsible menu, phone layout) was checked in a real browser, i
 
 | Project | Repo | Notes |
 |---|---|---|
-| 2W Ride Along | `akhilkashetty1/rideAlong2w` | **Migrated** from Create React App + Render Express to one Next.js app on Vercel. Domain `ride-along-form.in` (DNS at GoDaddy) points to Vercel (apex A record + `www` CNAME). Backend route replaces the old `rideAlongBackend`. |
+| 2W Ride Along | `akhilkashetty1/rideAlong2w` | **Migrated** from Create React App + Render Express to one Next.js app on Vercel. Domain `ride-along-form.in` (DNS at GoDaddy) points to Vercel (apex A record + `www` CNAME). Backend route replaces the old `rideAlongBackend`. In Oct 2026 the form got the 4W-style screens and mandatory answers (nothing pre-filled, secondary-vehicle fields required when chosen), in the 2W colours; the Sheet/hub columns are unchanged (the payload is tested identical to the old form's), so nothing changed here beyond the new `flagged` and `submittedAt` fields. |
 | 4W Ride Along | `akhilkashetty1/rideAlong4w` | Four-wheeler version; same architecture as RoadShield; 3D walkaround, offline outbox. Since Oct 2026 every Yes/No must be answered (nothing pre-filled), documents = Yes adds *Driving licence valid till* / *Insurance valid till* columns, and the primary/secondary vehicle questions are gone (new records have *Fuel Type*; older ones keep *Primary Vehicle…* / *Secondary…* columns, so both show up in the Columns panel). |
 | RoadShield | `akhilkashetty1/roadshield1` | Marketing site; contact form posts here too. `main` is deployed; feature work happens on branches. |
 | (retired) | `rideAlongProject/ride-along-form` (CRA + `gh-pages`), `rideAlongProject/rideAlongBackend` (Express on Render) | Old 2W stack. Keep archived. The old Brevo key committed in `rideAlongBackend`'s history **must stay revoked**. |
