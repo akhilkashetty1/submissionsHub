@@ -163,7 +163,7 @@ hub (the project logs it, and still saves to its other channels).
 | `STORAGE_LIMIT_MB` | no | Plan storage limit for the Overview meter (default 1024) |
 | `SITE_URL_ROADSHIELD` | for website photos | The RoadShield site's address, e.g. `https://road-shield.in` (no trailing slash). Section 16 |
 | `SITE_SECRET_ROADSHIELD` | for website photos | ≥ 16 random chars, the same value as RoadShield's `SITE_REVALIDATE_SECRET` |
-| `BLOB_READ_WRITE_TOKEN` | for uploads | Set automatically when a **public** Vercel Blob store is connected to the hub project. Without it, uploads fail on Vercel (locally they go to `.local-uploads/`) |
+| `BLOB_READ_WRITE_TOKEN` or `BLOB_STORE_ID` | for uploads | Set automatically when a **public** Vercel Blob store is connected to the hub project (older stores set the token, newer ones set `BLOB_STORE_ID` and authenticate with the project's OIDC token; both work). Without one, uploads fail on Vercel (locally they go to `.local-uploads/`) |
 | `INGEST_ORIGINS_2W` | no | Allows browsers on those site addresses to post to the 2W endpoint with **no key**, rate-limited. Not needed: 2W now posts from its own server. Leave empty. |
 
 **On each sending project:** `HUB_INGEST_URL`, `HUB_INGEST_KEY` (section 4). They also keep their own

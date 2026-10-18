@@ -13,7 +13,11 @@ import { del, put } from "@vercel/blob";
 const LOCAL_DIR = path.join(process.cwd(), ".local-uploads");
 const LOCAL_NAME = /^[a-z0-9-]{1,40}-[0-9a-f-]{36}\.webp$/;
 
-export const blobConfigured = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+/**
+ * Vercel's newer Blob integration sets BLOB_STORE_ID (and signs requests with the project's own
+ * OIDC token) instead of BLOB_READ_WRITE_TOKEN; the older one sets the token. Either works.
+ */
+export const blobConfigured = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 export const storageReady = () => blobConfigured() || !process.env.VERCEL;
 
 /** Saves a processed WebP and returns its public address and the key to delete it by. */
