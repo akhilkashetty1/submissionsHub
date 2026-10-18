@@ -288,7 +288,8 @@ How it is enforced (all in code, not just hidden buttons):
     in `lib/projects.ts`.
   - **Spreadsheet feel:** scrolls sideways and down with the checkbox + Received columns and heading row frozen,
     edge shadows, drag a column edge to resize (double-click resets), click a heading to sort server-side across
-    all pages (numbers numerically; asc → desc → clear). Flagged answers are red in the grid; flag and note counts
+    all pages (numbers numerically, dates like "05 Mar 2027" by date, e.g. the 4W documents' valid-till
+    columns; asc → desc → clear). Flagged answers are red in the grid; flag and note counts
     and the highlight dot sit in the frozen Received cell; clicking a row opens it.
 - **A record** (`/p/{project}/{id}`): all answers (remarks folded under questions), flagged answers in red, a
   highlight picker, notes (newest first; author or a Manager can delete), prev/next.
@@ -463,7 +464,7 @@ sticky columns, collapsible menu, phone layout) was checked in a real browser, i
 | Project | Repo | Notes |
 |---|---|---|
 | 2W Ride Along | `akhilkashetty1/rideAlong2w` | **Migrated** from Create React App + Render Express to one Next.js app on Vercel. Domain `ride-along-form.in` (DNS at GoDaddy) points to Vercel (apex A record + `www` CNAME). Backend route replaces the old `rideAlongBackend`. |
-| 4W Ride Along | `akhilkashetty1/rideAlong4w` | Four-wheeler version; same architecture as RoadShield; 3D walkaround, offline outbox. |
+| 4W Ride Along | `akhilkashetty1/rideAlong4w` | Four-wheeler version; same architecture as RoadShield; 3D walkaround, offline outbox. Since Oct 2026 every Yes/No must be answered (nothing pre-filled), documents = Yes adds *Driving licence valid till* / *Insurance valid till* columns, and the primary/secondary vehicle questions are gone (new records have *Fuel Type*; older ones keep *Primary Vehicle…* / *Secondary…* columns, so both show up in the Columns panel). |
 | RoadShield | `akhilkashetty1/roadshield1` | Marketing site; contact form posts here too. `main` is deployed; feature work happens on branches. |
 | (retired) | `rideAlongProject/ride-along-form` (CRA + `gh-pages`), `rideAlongProject/rideAlongBackend` (Express on Render) | Old 2W stack. Keep archived. The old Brevo key committed in `rideAlongBackend`'s history **must stay revoked**. |
 

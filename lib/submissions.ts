@@ -155,7 +155,9 @@ export async function listSubmissions(project: string, f: Filters, page: number,
     orderBy = `received_at ${d}, id ${d}`;
   } else if (sort?.col) {
     // Records store their answers as parallel header/value lists, so find this column's value by position.
-    // Numbers sort as numbers (2 before 10), everything else as case-insensitive text, empty cells last.
+    // Numbers sort as numbers (2 before 10), dates written like "05 Mar 2027" (optionally followed by a time)
+    // sort by date, everything else as case-insensitive text, empty cells last. The date key is built
+    // from the text with plain arithmetic, so an odd value can never make the query fail.
     params.push(sort.col);
     join = `left join lateral (
       select vv.x as v from jsonb_array_elements_text(submissions.headers) with ordinality hh(k, i)
@@ -163,6 +165,10 @@ export async function listSubmissions(project: string, f: Filters, page: number,
       where hh.k = $${params.length} limit 1) sv on true`;
     const d = sort.dir === "desc" ? "desc" : "asc";
     orderBy = `(case when nullif(sv.v, '') ~ '^-?[0-9]{1,15}(\\.[0-9]+)?$' then nullif(sv.v, '')::numeric end) ${d} nulls last,
+               (case when sv.v ~ '^[0-9]{1,2} [A-Za-z]{3} [0-9]{4}' then
+                  substring(sv.v from '^[0-9]{1,2} [A-Za-z]{3} ([0-9]{4})')::int * 10000
+                  + ((position(lower(substring(sv.v from '^[0-9]{1,2} ([A-Za-z]{3})')) in 'janfebmaraprmayjunjulaugsepoctnovdec') + 2) / 3) * 100
+                  + substring(sv.v from '^([0-9]{1,2})')::int end) ${d} nulls last,
                lower(nullif(sv.v, '')) ${d} nulls last, received_at desc, id desc`;
   }
 
