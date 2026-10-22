@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, ExternalLink, History, Loader2, MessageSquare, Repeat, TriangleAlert, X } from "lucide-react";
-import { historyAction } from "@/app/analysis-actions";
+import { peekAction, setFollowupAction, type PeekExtras } from "@/app/analysis-actions";
+import { createNote } from "@/app/record-actions";
+import MarkPicker from "@/components/MarkPicker";
+import { formatIST } from "@/lib/format";
+import { FOLLOWUP_LABELS } from "@/lib/followup-labels";
 import { REMARKS_SUFFIX, pct, type Check } from "@/lib/analysis";
-import type { History as HistoryData } from "@/lib/insights";
 import { startNav } from "@/lib/nav-state";
 import { cn } from "@/lib/utils";
 
-export type PeekRow = { id: string; received: string; data: Record<string, string>; score: { ok: number; total: number } | null };
+export type PeekRow = { id: string; received: string; mark: string | null; data: Record<string, string>; score: { ok: number; total: number } | null };
 
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
@@ -32,6 +35,7 @@ export function ScoreBadge({ ok, total, size = "sm" }: { ok: number; total: numb
  */
 export default function RecordPeek({
   projectId,
+  canWrite,
   row,
   title,
   checks,
@@ -42,6 +46,7 @@ export default function RecordPeek({
   onClose,
 }: {
   projectId: string;
+  canWrite: boolean;
   row: PeekRow;
   title: string;
   checks: Check[];
@@ -53,12 +58,18 @@ export default function RecordPeek({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [history, setHistory] = useState<{ id: string; data: HistoryData | null; error?: string } | null>(null);
+  const [history, setHistory] = useState<{ id: string; data: PeekExtras | null; error?: string } | null>(null);
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, start] = useTransition();
 
   useEffect(() => {
     let live = true;
-    historyAction(projectId, row.id).then((res) => {
-      if (live) setHistory({ id: row.id, data: res.ok ? res.history : null, error: res.ok ? undefined : res.error });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a new record starts with an empty note box
+    setText("");
+    setMsg(null);
+    peekAction(projectId, row.id).then((res) => {
+      if (live) setHistory({ id: row.id, data: res.ok ? res.peek : null, error: res.ok ? undefined : res.error });
     });
     return () => {
       live = false;
@@ -85,8 +96,35 @@ export default function RecordPeek({
   const checkHeaders = new Set(checks.map((c) => c.header));
   const others = Object.entries(row.data).filter(([h]) => !checkHeaders.has(h) && !h.endsWith(REMARKS_SUFFIX) && !facts.some((f) => f.label === h));
   const loading = !history || history.id !== row.id;
-  const entries = history?.data?.entries ?? [];
-  const repeats = history?.data?.repeats ?? [];
+  const entries = history?.data?.history.entries ?? [];
+  const repeats = history?.data?.history.repeats ?? [];
+  const notes = history?.data?.notes ?? [];
+  const followOf = (h: string) => history?.data?.followups.find((f) => f.header === h);
+
+  const setStatus = (header: string, status: string) =>
+    start(async () => {
+      setMsg(null);
+      const res = await setFollowupAction(projectId, row.id, header, { status });
+      if (!res.ok) return setMsg(res.error);
+      setHistory((h) => {
+        if (!h?.data) return h;
+        const rest = h.data.followups.filter((f) => f.header !== header);
+        const was = h.data.followups.find((f) => f.header === header);
+        return { ...h, data: { ...h.data, followups: [...rest, { owner: "", note: "", ...was, header, status: status as never }] } };
+      });
+    });
+  const addNote = () => {
+    if (!text.trim() || pending) return;
+    start(async () => {
+      setMsg(null);
+      const res = await createNote(projectId, row.id, text);
+      if (!res.ok) return setMsg(res.error);
+      const n = res.note;
+      setHistory((h) => (h?.data ? { ...h, data: { ...h.data, notes: [{ id: n.id, authorName: n.author_name, body: n.body, at: new Date(n.created_at).toISOString() }, ...h.data.notes] } } : h));
+      setText("");
+      router.refresh();
+    });
+  };
   const sections = [...new Set(checks.map((c) => c.section ?? ""))];
 
   return (
@@ -131,6 +169,13 @@ export default function RecordPeek({
           </dl>
         )}
 
+        {canWrite && (
+          <section>
+            <h3 className="eyebrow mb-2">Highlight</h3>
+            <MarkPicker projectId={projectId} ids={[row.id]} current={row.mark} />
+          </section>
+        )}
+
         {failed.length > 0 && (
           <section>
             <h3 className="eyebrow mb-2">Needs follow-up</h3>
@@ -141,6 +186,22 @@ export default function RecordPeek({
                     {c.label} <span className="font-semibold text-flag">· {c.answer}</span>
                   </p>
                   {c.remark && <p className="mt-0.5 text-xs italic text-ink-soft">&ldquo;{c.remark}&rdquo;</p>}
+                  {!loading && !history?.error && (
+                    <div className="mt-1.5 flex items-center gap-2 text-xs">
+                      {canWrite ? (
+                        <select value={followOf(c.header)?.status ?? "open"} onChange={(e) => setStatus(c.header, e.target.value)} disabled={pending} aria-label={`Follow-up status: ${c.label}`} className="field h-7 w-auto py-0 text-xs">
+                          {Object.entries(FOLLOWUP_LABELS).map(([k, l]) => (
+                            <option key={k} value={k}>
+                              {l}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="font-medium text-ink-soft">{FOLLOWUP_LABELS[followOf(c.header)?.status ?? "open"]}</span>
+                      )}
+                      {followOf(c.header)?.owner && <span className="text-muted">· {followOf(c.header)?.owner}</span>}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -188,6 +249,41 @@ export default function RecordPeek({
                 ))}
               </ol>
             </>
+          )}
+        </section>
+
+        <section>
+          <h3 className="eyebrow mb-2 flex items-center gap-1.5">
+            <MessageSquare className="h-3.5 w-3.5" /> Notes {notes.length > 0 && <span className="font-normal text-faint">({notes.length})</span>}
+          </h3>
+          {canWrite && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addNote();
+              }}
+              className="mb-2 flex flex-col gap-1.5"
+            >
+              <textarea value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === "Enter" && (e.preventDefault(), addNote())} maxLength={2000} rows={2} placeholder="Add a note…" aria-label="Add a note" className="field text-[0.8125rem]" />
+              <button disabled={pending || !text.trim()} className="btn btn-primary btn-sm self-end">
+                {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Add note
+              </button>
+            </form>
+          )}
+          {msg && <p className="mb-2 text-xs text-flag">{msg}</p>}
+          {notes.length > 0 ? (
+            <ul className="space-y-1.5">
+              {notes.map((n) => (
+                <li key={n.id} className="rounded-lg bg-paper-2 px-3 py-2 ring-1 ring-line">
+                  <p className="whitespace-pre-wrap break-words text-ink">{n.body}</p>
+                  <p className="mt-1 text-[0.6875rem] text-muted">
+                    {n.authorName} · {formatIST(n.at)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            !loading && <p className="text-xs text-muted">No notes yet.</p>
           )}
         </section>
 

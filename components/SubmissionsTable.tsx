@@ -759,6 +759,7 @@ export default function SubmissionsTable({
       {peekRow && analysis && (
         <RecordPeek
           projectId={projectId}
+          canWrite={canWrite}
           row={peekRow}
           title={titleOf(peekRow)}
           checks={[...(checksById.get(peekRow.id)?.values() ?? [])]}

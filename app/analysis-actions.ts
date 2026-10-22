@@ -8,6 +8,7 @@ import {
   createSavedView,
   deleteSavedView,
   getSavedView,
+  followupsFor,
   historyFor,
   mergeNames,
   setFollowup,
@@ -18,6 +19,7 @@ import {
   type SavedView,
 } from "@/lib/insights";
 import { can } from "@/lib/permissions";
+import { notesFor } from "@/lib/submissions";
 import type { Result } from "@/app/record-actions";
 
 /** How a column's values split across the records matching the filters (column menu). Viewer. */
@@ -41,6 +43,37 @@ export async function historyAction(projectId: string, id: string): Promise<Resu
     return { ok: true, history: await historyFor(auth.project, String(id)) };
   } catch (err) {
     console.error("history failed", err);
+    return { ok: false, error: "Could not load. Try again." };
+  }
+}
+
+export type PeekExtras = {
+  history: History;
+  notes: { id: string; authorName: string; body: string; at: string }[];
+  followups: { header: string; status: FollowupStatus; owner: string; note: string }[];
+};
+
+/** Everything the quick-look panel needs besides the row itself: history, notes, follow-up statuses. Viewer. */
+export async function peekAction(projectId: string, id: string): Promise<Result<{ peek: PeekExtras }>> {
+  const auth = await authorise(projectId, "read");
+  if (!auth.ok) return auth;
+  const sid = String(id);
+  if (!/^\d{1,18}$/.test(sid)) return { ok: false, error: "Unknown record." };
+  try {
+    const [history, notes, followups] = await Promise.all([historyFor(auth.project, sid), notesFor([sid]), followupsFor(sid)]);
+    return {
+      ok: true,
+      peek: {
+        history,
+        notes: (notes.get(sid) ?? [])
+          .slice()
+          .reverse()
+          .map((n) => ({ id: n.id, authorName: n.author_name, body: n.body, at: new Date(n.created_at).toISOString() })),
+        followups: followups.map((f) => ({ header: f.header, status: f.status, owner: f.owner, note: f.note })),
+      },
+    };
+  } catch (err) {
+    console.error("peek failed", err);
     return { ok: false, error: "Could not load. Try again." };
   }
 }
