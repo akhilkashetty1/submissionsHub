@@ -4,6 +4,9 @@ import { markById, MARKS } from "@/lib/marks";
 import { can } from "@/lib/permissions";
 import { getProject } from "@/lib/projects";
 import { exportSubmissions, formatIST, notesFor } from "@/lib/submissions";
+import { cleanFilters, decodeColumnFilter, describeColumnFilter } from "@/lib/filters";
+import { ensureAnalysed } from "@/lib/analysis-server";
+import { addSummarySheets } from "@/lib/report";
 
 export const dynamic = "force-dynamic";
 
@@ -24,18 +27,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
 
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
-  const markParam = url.searchParams.get("mark") ?? "";
-  const rows = await exportSubmissions(
-    project.id,
-    {
-      q: url.searchParams.get("q") ?? "",
-      from: url.searchParams.get("from") ?? "",
-      to: url.searchParams.get("to") ?? "",
-      mark: markParam === "any" || markParam === "none" || MARKS.some((m) => m.id === markParam) ? markParam : "",
-      notes: url.searchParams.get("notes") === "1" ? "1" : "",
-    },
-    id && /^\d+$/.test(id) ? [id] : undefined,
-  );
+  const sp = url.searchParams;
+  const filters = cleanFilters({ q: sp.get("q") ?? "", from: sp.get("from") ?? "", to: sp.get("to") ?? "", mark: sp.get("mark") ?? "", notes: sp.get("notes") ?? "", f: sp.getAll("f") });
+  if (!(filters.mark === "any" || filters.mark === "none" || MARKS.some((m) => m.id === filters.mark))) filters.mark = "";
+  if (project.analysis) await ensureAnalysed(project);
+  const rows = await exportSubmissions(project.id, filters, id && /^\d+$/.test(id) ? [id] : undefined);
   const notes = await notesFor(rows.filter((r) => r.note_count > 0).map((r) => r.id));
 
   const columns: string[] = [];
@@ -45,6 +41,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
   const FIXED = 5;
   const wb = new ExcelJS.Workbook();
   wb.creator = "Submissions Hub";
+  // The analysis first (assessment portals, whole exports only), then the data.
+  if (project.analysis && !id) {
+    const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+    const scope = [
+      filters.from || filters.to ? `${filters.from ? fmtDay(filters.from) : "start"} – ${filters.to ? fmtDay(filters.to) : "today"}` : "All dates",
+      filters.q && `search “${filters.q}”`,
+      ...filters.f.map((raw) => describeColumnFilter(decodeColumnFilter(raw)!, 60)),
+      `${rows.length} records`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    await addSummarySheets(wb, project, rows, { report: sp.get("report") === "1", scope });
+  }
   const ws = wb.addWorksheet(project.short, { views: [{ state: "frozen", ySplit: 1, xSplit: 2 }] });
   ws.columns = [
     { header: "Hub ID", width: 9 },

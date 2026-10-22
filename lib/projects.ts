@@ -6,7 +6,12 @@
  * - `originsEnv`: for projects that post straight from the browser (they can't
  *   keep a secret), a comma-separated list of allowed site origins.
  * - `listColumns`: which submitted fields show in the table, by header name.
+ * - `analysis`: for the assessment forms, where the person, vehicle and groups (HQ, Team, Line Manager)
+ *   are, and which checks are good when answered No. Turns on scores, insights, follow-ups, expiries
+ *   and clean-up for that portal (see lib/analysis.ts).
  */
+import type { AnalysisConfig } from "@/lib/analysis";
+
 export type Project = {
   id: string;
   name: string;
@@ -17,7 +22,11 @@ export type Project = {
   originsEnv?: string;
   titleColumn: string;
   listColumns: string[];
+  analysis?: AnalysisConfig;
 };
+
+/** "Is the rider sleepy?" and "Does the rider use a mobile phone?" are good when the answer is No. */
+const EXPECT_NO = ["sleepy", "mobile phone"];
 
 export const PROJECTS: Project[] = [
   {
@@ -30,6 +39,16 @@ export const PROJECTS: Project[] = [
     originsEnv: "INGEST_ORIGINS_2W",
     titleColumn: "Name",
     listColumns: ["Name", "HQ", "Team", "Line Man", "Primary Vehicle Number"],
+    analysis: {
+      person: ["Name"],
+      vehicle: ["Primary Vehicle Number"],
+      groups: [
+        { id: "hq", label: "HQ", columns: ["HQ"] },
+        { id: "team", label: "Team", columns: ["Team"] },
+        { id: "lm", label: "Line Manager", columns: ["Line Man"] },
+      ],
+      expectNo: EXPECT_NO,
+    },
   },
   {
     id: "4w",
@@ -40,6 +59,16 @@ export const PROJECTS: Project[] = [
     keyEnv: "INGEST_KEY_4W",
     titleColumn: "Name",
     listColumns: ["Name", "HQ", "Team", "Line Manager", "Vehicle Number"],
+    analysis: {
+      person: ["Name"],
+      vehicle: ["Vehicle Number", "Primary Vehicle Number"],
+      groups: [
+        { id: "hq", label: "HQ", columns: ["HQ"] },
+        { id: "team", label: "Team", columns: ["Team"] },
+        { id: "lm", label: "Line Manager", columns: ["Line Manager"] },
+      ],
+      expectNo: EXPECT_NO,
+    },
   },
   {
     id: "roadshield",

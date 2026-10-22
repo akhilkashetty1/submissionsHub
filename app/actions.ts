@@ -7,6 +7,7 @@ import { logActivity } from "@/lib/activity";
 import { query } from "@/lib/db";
 import { DUMMY_HASH, safeEqual, verifyPassword } from "@/lib/password";
 import { deleteByIds, deleteMatching, type Filters } from "@/lib/submissions";
+import { cleanFilters } from "@/lib/filters";
 import { getUserByUsername, touchLogin } from "@/lib/users";
 
 const MAX_FAILURES = 8;
@@ -86,10 +87,6 @@ export async function deleteSubmissions(projectId: string, ids: string[]): Promi
   }
 }
 
-const cleanFilters = (f: Filters | undefined): Filters => {
-  const s = (v: unknown) => (typeof v === "string" ? v : "");
-  return { q: s(f?.q), from: s(f?.from), to: s(f?.to), mark: s(f?.mark), notes: s(f?.notes) };
-};
 
 /** Permanently deletes everything matching the current filters (or the whole portal when there are none). */
 export async function deleteAllMatching(projectId: string, filters: Filters): Promise<DeleteResult> {

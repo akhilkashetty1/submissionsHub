@@ -6,7 +6,12 @@ import { ChevronLeft, ChevronRight, Inbox, SearchX } from "lucide-react";
 import { requireProjectAccess } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { getProject } from "@/lib/projects";
-import { RECEIVED, formatIST, listSubmissions, type Sort } from "@/lib/submissions";
+import { RECEIVED, SCORE, formatIST, listSubmissions, type Sort } from "@/lib/submissions";
+import { describeColumnFilter, decodeColumnFilter, filtersFromSearchParams, filtersToParams, isFiltered } from "@/lib/filters";
+import { ensureAnalysed } from "@/lib/analysis-server";
+import { groupSummary, listSavedViews, loadAliases } from "@/lib/insights";
+import GroupSummary from "@/components/GroupSummary";
+import ActiveFilters from "@/components/ActiveFilters";
 import { availableColumns, getView } from "@/lib/views";
 import SubmissionsTable from "@/components/SubmissionsTable";
 import FilterBar from "@/components/FilterBar";
@@ -16,6 +21,7 @@ import NavFade from "@/components/NavFade";
 import TableWorkspace from "@/components/TableWorkspace";
 import { FOCUS_COOKIE } from "@/lib/sidebar";
 import { MARKS } from "@/lib/marks";
+import PortalTabs from "@/components/PortalTabs";
 
 const PAGE_SIZE = 50;
 /** Long answers are cut for the grid (the record page shows them in full). */
@@ -23,7 +29,7 @@ const CELL_MAX = 300;
 
 type Props = {
   params: Promise<{ project: string }>;
-  searchParams: Promise<{ q?: string; from?: string; to?: string; mark?: string; notes?: string; sort?: string; dir?: string; page?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -34,28 +40,37 @@ export default async function ProjectPage({ params, searchParams }: Props) {
   const { user, project } = await requireProjectAccess((await params).project, "read");
 
   const sp = await searchParams;
-  const mark = sp.mark === "any" || sp.mark === "none" || MARKS.some((m) => m.id === sp.mark) ? sp.mark! : "";
-  const filters = { q: sp.q ?? "", from: sp.from ?? "", to: sp.to ?? "", mark, notes: sp.notes === "1" ? "1" : "" };
-  const page = Math.max(1, Number(sp.page) || 1);
-  const sortCol = typeof sp.sort === "string" && sp.sort.length > 0 && sp.sort.length <= 300 ? sp.sort : "";
-  const sortDir: "asc" | "desc" = sp.dir === "desc" ? "desc" : "asc";
+  const one = (k: string) => (Array.isArray(sp[k]) ? sp[k]![0] : sp[k]) ?? "";
+  const parsed = filtersFromSearchParams(sp);
+  const mark = parsed.mark === "any" || parsed.mark === "none" || MARKS.some((m) => m.id === parsed.mark) ? parsed.mark : "";
+  const filters = { ...parsed, mark };
+  const page = Math.max(1, Number(one("page")) || 1);
+  const sortCol = one("sort").length > 0 && one("sort").length <= 300 ? one("sort") : "";
+  const sortDir: "asc" | "desc" = one("dir") === "desc" ? "desc" : "asc";
   const sort: Sort | undefined = sortCol ? { col: sortCol, dir: sortDir } : undefined;
+  const analysis = project.analysis;
+  const group = analysis?.groups.find((g) => g.id === one("group"));
 
-  const [{ rows, total }, view, available] = await Promise.all([
+  if (analysis) await ensureAnalysed(project);
+  const [{ rows, total }, view, available, savedViews, groups, aliases] = await Promise.all([
     listSubmissions(project.id, filters, page, PAGE_SIZE, sort),
     getView(user.id, project.id),
     availableColumns(project.id),
+    listSavedViews(project.id),
+    group ? groupSummary(project, filters, group.id) : Promise.resolve(null),
+    analysis ? loadAliases(project.id) : Promise.resolve(new Map<string, Map<string, string>>()),
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // The current search and filters as a query string (no sort or page), for building links.
-  const filterQuery = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== "")).toString();
+  const filterQuery = filtersToParams(filters).toString();
   const withSort = (extra: Record<string, string | number>) => {
     const p = new URLSearchParams(filterQuery);
     if (sort) {
       p.set("sort", sort.col);
       p.set("dir", sort.dir);
     }
+    if (group) p.set("group", group.id);
     for (const [k, v] of Object.entries(extra)) if (v !== "" && v != null) p.set(k, String(v));
     const s = p.toString();
     return s ? `?${s}` : "";
@@ -63,7 +78,13 @@ export default async function ProjectPage({ params, searchParams }: Props) {
 
   // After deleting the last rows of the last page, land on the new last page instead of an empty one.
   if (page > pages) redirect(`/p/${project.id}${pages > 1 ? withSort({ page: pages }) : withSort({})}`);
-  const filtered = Boolean(filters.q || filters.from || filters.to || filters.mark || filters.notes);
+  const filtered = isFiltered(filters);
+  // What the table's own links (sorting) keep: the filters plus the grouping.
+  const tableQuery = (() => {
+    const p = new URLSearchParams(filterQuery);
+    if (group) p.set("group", group.id);
+    return p.toString();
+  })();
 
   const canWrite = can(user, project.id, "write");
   const canManage = can(user, project.id, "manage");
@@ -84,7 +105,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
               {sort && (
                 <>
                   {" "}
-                  · sorted by <strong className="font-medium text-ink-soft">{sort.col === RECEIVED ? "time received" : sort.col}</strong> ({sort.dir === "asc" ? "A→Z / low→high" : "Z→A / high→low"})
+                  · sorted by <strong className="font-medium text-ink-soft">{sort.col === RECEIVED ? "time received" : sort.col === SCORE ? "score" : sort.col}</strong> ({sort.dir === "asc" ? "A→Z / low→high" : "Z→A / high→low"})
                 </>
               )}
             </p>
@@ -96,6 +117,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
           className="btn btn-secondary"
         />
       </header>
+      <PortalTabs projectId={project.id} analysis={Boolean(analysis)} />
 
       <TableWorkspace
         initialFocus={initialFocus}
@@ -119,10 +141,23 @@ export default async function ProjectPage({ params, searchParams }: Props) {
             notes={filters.notes}
             sort={sort?.col ?? ""}
             dir={sort?.dir ?? ""}
+            group={group?.id ?? ""}
+            columnFilters={filters.f}
             filtered={filtered}
           />
         }
       >
+        <ActiveFilters
+          chips={filters.f.map((raw) => ({ raw, label: describeColumnFilter(decodeColumnFilter(raw)!) }))}
+        />
+        {group && groups && (
+          <GroupSummary
+            projectId={project.id}
+            group={{ id: group.id, label: group.label }}
+            rows={groups.map((g) => ({ ...g, lastAt: formatIST(g.lastAt) }))}
+            baseQuery={filterQuery}
+          />
+        )}
         <NavFade className="space-y-4 group-data-[focus=true]/focus:flex group-data-[focus=true]/focus:min-h-0 group-data-[focus=true]/focus:flex-1 group-data-[focus=true]/focus:flex-col group-data-[focus=true]/focus:space-y-0">
           {rows.length ? (
             // Keyed so ticked rows reset when you change page, filters or sort.
@@ -135,8 +170,13 @@ export default async function ProjectPage({ params, searchParams }: Props) {
               defaults={project.listColumns}
               initialColumns={initialColumns}
               initialWidths={view.widths}
+              analysis={analysis ? { expectNo: analysis.expectNo, groups: analysis.groups.map((g) => ({ id: g.id, label: g.label, columns: g.columns })) } : null}
+              aliases={Object.fromEntries([...aliases.entries()].map(([k, m]) => [k, Object.fromEntries(m)]))}
+              savedViews={savedViews.map((v) => ({ id: v.id, name: v.name, query: v.query, createdBy: v.created_by, mine: v.created_by_id !== null && Number(v.created_by_id) === user.id }))}
+              group={group?.id ?? ""}
               rows={rows.map((r) => ({
                 id: r.id,
+                score: r.score_total ? { ok: r.score_ok ?? 0, total: r.score_total } : null,
                 received: formatIST(r.received_at),
                 mark: r.mark,
                 notes: r.note_count,
@@ -149,7 +189,7 @@ export default async function ProjectPage({ params, searchParams }: Props) {
               filters={filters}
               filtered={filtered}
               sort={sort ? { col: sort.col, dir: sort.dir } : null}
-              baseQuery={filterQuery}
+              baseQuery={tableQuery}
               canWrite={canWrite}
               canManage={canManage}
             />

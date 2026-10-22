@@ -7,8 +7,8 @@ import { deleteSubmissions } from "@/app/actions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { startNav } from "@/lib/nav-state";
 
-/** Delete this one submission, then go back to the list. */
-export default function DeleteSubmissionButton({ projectId, id, title }: { projectId: string; id: string; title: string }) {
+/** Delete this one submission, then go back to the list (or, `compact`, stay on the page and refresh it). */
+export default function DeleteSubmissionButton({ projectId, id, title, compact }: { projectId: string; id: string; title: string; compact?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +19,10 @@ export default function DeleteSubmissionButton({ projectId, id, title }: { proje
     start(async () => {
       const res = await deleteSubmissions(projectId, [id]);
       if (!res.ok) return setError(res.error);
+      if (compact) {
+        setOpen(false);
+        return router.refresh();
+      }
       startNav();
       router.push(`/p/${projectId}`);
       router.refresh();
@@ -33,9 +37,11 @@ export default function DeleteSubmissionButton({ projectId, id, title }: { proje
           setError(null);
           setOpen(true);
         }}
-        className="btn btn-secondary text-flag hover:border-[#f0c4c7] hover:bg-flag-wash"
+        title={compact ? `Delete #${id}` : undefined}
+        aria-label={compact ? `Delete submission #${id}` : undefined}
+        className={compact ? "grid h-6 w-6 place-items-center rounded-md text-muted transition hover:bg-flag-wash hover:text-flag" : "btn btn-secondary text-flag hover:border-[#f0c4c7] hover:bg-flag-wash"}
       >
-        <Trash2 className="h-4 w-4" /> Delete
+        <Trash2 className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} /> {!compact && "Delete"}
       </button>
       <ConfirmDialog
         open={open}

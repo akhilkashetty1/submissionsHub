@@ -20,6 +20,8 @@ export default function FilterBar({
   notes,
   sort,
   dir,
+  group = "",
+  columnFilters = [],
   filtered,
 }: {
   projectId: string;
@@ -30,6 +32,9 @@ export default function FilterBar({
   notes: string;
   sort: string;
   dir: string;
+  /** Kept when searching: the grouping and the column filters set from column menus. */
+  group?: string;
+  columnFilters?: string[];
   filtered: boolean;
 }) {
   const router = useRouter();
@@ -44,6 +49,8 @@ export default function FilterBar({
       if (value) params.set(key, value);
     }
     if (data.get("notes")) params.set("notes", "1");
+    columnFilters.forEach((f) => params.append("f", f));
+    if (group) params.set("group", group);
     // Searching keeps your sort order.
     if (sort) {
       params.set("sort", sort);

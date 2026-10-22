@@ -1,6 +1,7 @@
 "use server";
 
 import { authorise } from "@/lib/access";
+import { cleanFilters } from "@/lib/filters";
 import { isMark } from "@/lib/marks";
 import { can } from "@/lib/permissions";
 import {
@@ -42,11 +43,10 @@ export async function setMarkForAllMatching(projectId: string, filters: Filters,
   if (!auth.ok) return auth;
   const m = parseMark(mark);
   if (m === undefined) return { ok: false, error: "Unknown colour." };
-  const s = (v: unknown) => (typeof v === "string" ? v : "");
   try {
     return {
       ok: true,
-      changed: await setMarkMatching(auth.project.id, { q: s(filters?.q), from: s(filters?.from), to: s(filters?.to), mark: s(filters?.mark), notes: s(filters?.notes) }, m, auth.user.displayName),
+      changed: await setMarkMatching(auth.project.id, cleanFilters(filters), m, auth.user.displayName),
     };
   } catch (err) {
     console.error("setMarkForAllMatching failed", err);
@@ -61,11 +61,9 @@ export async function setMarkForAllMatching(projectId: string, filters: Filters,
 export async function clearHighlights(projectId: string, ids: string[] | null, matching?: Filters): Promise<Result<{ changed: number }>> {
   const auth = await authorise(projectId, "write");
   if (!auth.ok) return auth;
-  const s = (v: unknown) => (typeof v === "string" ? v : "");
   try {
     if (matching) {
-      const f = { q: s(matching.q), from: s(matching.from), to: s(matching.to), mark: s(matching.mark), notes: s(matching.notes) };
-      return { ok: true, changed: await clearHighlightsMatching(auth.project.id, f) };
+      return { ok: true, changed: await clearHighlightsMatching(auth.project.id, cleanFilters(matching)) };
     }
     if (!Array.isArray(ids) || !ids.length) return { ok: false, error: "Nothing selected." };
     return { ok: true, changed: await clearHighlightsByIds(auth.project.id, ids.map(String)) };

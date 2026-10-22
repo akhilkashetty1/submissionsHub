@@ -23,7 +23,7 @@ export default function MarkPicker({
 }: {
   projectId: string;
   ids?: string[];
-  matching?: { q: string; from: string; to: string; mark: string; notes: string };
+  matching?: { q: string; from: string; to: string; mark: string; notes: string; f?: string[] };
   current?: string | null;
   onDone?: (message: string) => void;
   /** On the dark selection bar. */

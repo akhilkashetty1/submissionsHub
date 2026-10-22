@@ -158,6 +158,52 @@ const SCHEMA = `
     manifest    jsonb       not null,
     fetched_at  timestamptz not null default now()
   );
+
+  -- Analysis worked out from each record (lib/analysis.ts) and kept so the table can sort and filter by it.
+  -- analysed_v is the rules' version: records analysed by older rules are redone automatically.
+  alter table submissions add column if not exists score_ok    integer;
+  alter table submissions add column if not exists score_total integer;
+  alter table submissions add column if not exists fails       jsonb;
+  alter table submissions add column if not exists person_key  text;
+  alter table submissions add column if not exists vehicle_key text;
+  alter table submissions add column if not exists analysed_v  integer;
+  create index if not exists submissions_project_person on submissions (project, person_key);
+
+  -- Name clean-up: another spelling of a value ("Hyd") shown and grouped as one name ("Hyderabad").
+  -- The records themselves are never changed.
+  create table if not exists value_aliases (
+    project     text        not null,
+    field       text        not null,
+    raw         text        not null,
+    canonical   text        not null,
+    created_by  text,
+    created_at  timestamptz not null default now(),
+    primary key (project, field, raw)
+  );
+
+  -- Follow-up on a failed check: status, who's on it, a note. No row = still open.
+  create table if not exists followups (
+    submission_id  bigint      not null references submissions(id) on delete cascade,
+    header         text        not null,
+    status         text        not null default 'open' check (status in ('open', 'in_progress', 'fixed')),
+    owner          text        not null default '',
+    note           text        not null default '',
+    updated_by     text,
+    updated_at     timestamptz not null default now(),
+    primary key (submission_id, header)
+  );
+
+  -- Saved table views (filters, sort, grouping), shared with everyone who can open the portal
+  create table if not exists saved_filters (
+    id          bigserial primary key,
+    project     text        not null,
+    name        text        not null,
+    query       text        not null,
+    created_by_id bigint,
+    created_by  text        not null,
+    created_at  timestamptz not null default now()
+  );
+  create index if not exists saved_filters_project on saved_filters (project, name);
 `;
 
 async function migrate() {
@@ -171,7 +217,11 @@ async function migrate() {
         and to_regclass('public.cell_marks') is not null
         and to_regclass('public.site_slots') is not null
         and to_regclass('public.site_media') is not null
-        and to_regclass('public.site_manifests') is not null as ok`,
+        and to_regclass('public.site_manifests') is not null
+        and to_regclass('public.followups') is not null
+        and to_regclass('public.value_aliases') is not null
+        and to_regclass('public.saved_filters') is not null
+        and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'submissions' and column_name = 'analysed_v') as ok`,
   );
   if (rows[0]?.ok) return;
 

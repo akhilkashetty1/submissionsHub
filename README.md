@@ -192,6 +192,10 @@ collide (this works through Neon's connection pooler).
 | `site_media` | Website photos uploaded here: `site`, Blob `url` + `storage_key`, `w`/`h`/`bytes`, uploader. The files live in Vercel Blob, never in the database. |
 | `site_slots` | One row per photo spot (`site`, `slot`): `draft` and `published` (jsonb `{layout?, items:[{src, alt, w, h, label, position, media?}]}`). `published` null = the site shows its built-in photos. |
 | `site_manifests` | The last list of photo spots each site reported (so the editor opens if the site is briefly down). |
+| `submissions` analysis columns | `score_ok`, `score_total`, `fails` (headings of failed checks), `person_key`, `vehicle_key`, `analysed_v`. Computed at ingest by `lib/analysis-server.ts`; older rows are back-filled in batches the first time a portal is opened (and again whenever `ANALYSIS_VERSION` is bumped). |
+| `followups` | Status of one failed check on one record: `(submission_id, header)` primary key (**cascades on delete**), `status` open / in_progress / fixed, `owner`, `note`, who/when. No row = Open. |
+| `value_aliases` | Name clean-up: `(project, field, raw, canonical)`. "Hyd" shown and counted as "Hyderabad". Records are never changed. |
+| `saved_filters` | Named views of a portal's table (the URL query: filters, sort, grouping), shared with everyone who can open the portal. |
 | `ingest_log`, `login_failures` | Rate-limit bookkeeping (kept small; old rows are pruned). |
 
 **When you add a table or column:** add the idempotent statement to `SCHEMA` in `lib/db.ts` **and** extend the
@@ -291,6 +295,29 @@ How it is enforced (all in code, not just hidden buttons):
     all pages (numbers numerically, dates like "05 Mar 2027" by date, e.g. the 4W documents' valid-till
     columns; asc → desc → clear). Flagged answers are red in the grid; flag and note counts
     and the highlight dot sit in the frozen Received cell; clicking a row opens it.
+- **Analysis (2W and 4W portals; config in `analysis` of `lib/projects.ts`):** a tab strip (Submissions · Insights ·
+  Follow-ups · Expiries · Clean-up) and, in the table:
+  - **Answer chips + Score column:** every Yes/No shown as a coloured chip (red = the wrong answer for that
+    question; a speech icon when there is a remark) and `score_ok/score_total` with a bar. What counts as the wrong
+    answer comes from `lib/analysis.ts` (`expectedAnswer`; "sleepy" and "mobile phone" questions are good when No).
+  - **Quick look:** the eye button, or Space / Enter on a focused row, opens a side panel (↑/↓ or J/K move, Esc
+    closes) with failed checks and remarks, the person's earlier assessments and repeat failures.
+  - **Column menu (▾ on a heading):** how that column is answered (counts and bar), click a value to filter by it,
+    sort, hide. Column filters live in the URL as repeated `f=<column>::<value>` (values `__fail__`, `__pass__`,
+    `__blank__`, Yes/No or an exact value) and show as removable chips; export, bulk delete and bulk highlight honour them.
+  - **Group by** HQ / Team / Line Manager: a summary above the table (count, average score, failed checks); click a
+    row to filter to it. **Views:** save the current filters, sort and grouping under a name for the whole team.
+  - **Insights:** period picker; headline numbers, weakest checks, a check × HQ/Team/Line-Manager heatmap, a 12-month
+    trend, line-manager activity, repeat problems (same person/vehicle failing the same check again). Everything links
+    into the filtered table. **Print** gives a clean one-pager.
+  - **Follow-ups:** board of failed checks by status (Open → In progress → Fixed): drag or arrow-move, assign, note,
+    "Save & mark fixed". Also shown on each record. Needs Contributor+ to change.
+  - **Expiries:** driving licence / insurance dates (4W and the 2W documents question) that have passed or are due in 30/60/90 days.
+  - **Clean-up:** suggests merging different spellings of HQ / Team / Line Manager (same letters, short forms, small
+    typos); a Manager merges them (undoable, logged); also lists probable duplicate records.
+  - **Excel:** a whole-portal export starts with a **Summary** sheet (scored for exactly the records exported:
+    headline numbers, checks worst first, results by HQ / Team / Line Manager). `?report=1` (the Insights page's
+    "Report (Excel)") adds Heatmap, open Follow-ups and Expiries sheets.
 - **A record** (`/p/{project}/{id}`): all answers (remarks folded under questions), flagged answers in red, a
   highlight picker, notes (newest first; author or a Manager can delete), prev/next.
 - **Highlights:** five colours with meanings (`lib/marks.ts`: Needs action, Follow up, Done / OK, For info, Escalated),
@@ -322,7 +349,7 @@ app/
   (admin)/(app)/p/[project]/     layout (access gate) · page (table) · [id]/ (record) · loading skeletons
   (admin)/(app)/(admin-only)/    layout (admins only) · users/ · activity/
   api/ingest/[project]/          how projects send data in (key auth)
-  api/export/[project]/          Excel export (session + read access)
+  api/export/[project]/          Excel export (session + read access); `report=1` adds the analysis sheets (lib/report.ts)
   api/health/                    setup check
   (admin)/(app)/site/[site]/     website photo editor (layout = access gate)
   api/site/[site]/               public feed of published photos (read by the site)
@@ -331,6 +358,7 @@ app/
   site-actions.ts                save draft, discard, publish, delete unused photo
   actions.ts                     login, logout, delete records
   record-actions.ts              highlight, notes
+  analysis-actions.ts            column breakdown, history, follow-ups, name merges, saved views (each re-authorises)
   user-actions.ts                create/edit/reset/delete people, change own password
   view-actions.ts                save/reset a person's table layout
 components/                      SubmissionsTable (grid), ColumnPicker, NotesPanel, MarkPicker, UsersManager,
@@ -344,6 +372,11 @@ lib/
   submissions.ts                 all record queries: list/sort/filter, marks, notes, delete, stats
   users.ts · password.ts         people and scrypt/password helpers
   views.ts                       saved columns, available columns
+  analysis.ts                    pure reading rules: checks, score, expected answers, person/vehicle keys, dates, similar names
+  analysis-server.ts             computes + back-fills the stored analysis (ANALYSIS_VERSION)
+  filters.ts                     URL filters (incl. column filters) shared by page, actions, export
+  insights.ts                    all analysis queries: breakdowns, insights, follow-ups, expiries, history, clean-up, saved views
+  report.ts                      Summary / report sheets of the Excel export
   marks.ts · format.ts · sidebar.ts · nav-state.ts · activity.ts · utils.ts
   sites.ts                       the websites (browser-safe types, access id `site:<id>`)
   site-photos.ts                 manifest fetch, drafts, publish + refresh, library, clean-up, public feed

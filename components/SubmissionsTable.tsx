@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, CheckCircle2, Columns3, MessageSquare, MoreHorizontal, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check as CheckIcon, CheckCircle2, ChevronDown, Columns3, Eye, MessageSquare, MoreHorizontal, Trash2, TriangleAlert, X } from "lucide-react";
 import { deleteAllMatching, deleteSubmissions } from "@/app/actions";
 import { resetViewAction, saveViewAction } from "@/app/view-actions";
 import ColumnPicker, { type SaveState } from "@/components/ColumnPicker";
@@ -12,6 +12,11 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import MarkPicker from "@/components/MarkPicker";
 import QuickActions, { type QuickTarget } from "@/components/QuickActions";
 import { FocusButton, useFocusMode } from "@/components/TableWorkspace";
+import ColumnMenu from "@/components/ColumnMenu";
+import RecordPeek from "@/components/RecordPeek";
+import { GroupByPicker, ViewsMenu, type SavedViewLite } from "@/components/TableTools";
+import { decodeColumnFilter } from "@/lib/filters";
+import { firstOf, pct, readChecksFromMap, type Check } from "@/lib/analysis";
 import { markById } from "@/lib/marks";
 import { startNav } from "@/lib/nav-state";
 import { cn } from "@/lib/utils";
@@ -28,14 +33,20 @@ export type TableRow = {
   flaggedCols: string[];
   /** Colours on individual values: heading → colour. */
   cellMarks: Record<string, string>;
+  /** Checks passed / answered (assessment portals). */
+  score: { ok: number; total: number } | null;
 };
-export type TableFilters = { q: string; from: string; to: string; mark: string; notes: string };
+export type TableFilters = { q: string; from: string; to: string; mark: string; notes: string; f: string[] };
+/** What the browser needs to read checks and show cleaned-up names (see lib/analysis.ts). */
+export type TableAnalysis = { expectNo: string[]; groups: { id: string; label: string; columns: string[] }[] } | null;
 export type TableSort = { col: string; dir: "asc" | "desc" } | null;
 
 /** Changes made in this session that the server hasn't sent back yet (so the table reacts instantly). */
 type Overrides = Record<string, { mark?: string | null; notes?: number; cells?: Record<string, string | null> }>;
 
 const RECEIVED = "received";
+const SCORE = "__score";
+const SCORE_W = 132;
 const DEFAULT_WIDTH = 170;
 const MIN_WIDTH = 70;
 const MAX_WIDTH = 900;
@@ -72,6 +83,10 @@ export default function SubmissionsTable({
   baseQuery,
   canWrite,
   canManage,
+  analysis = null,
+  aliases = {},
+  savedViews = [],
+  group = "",
 }: {
   projectId: string;
   projectShort: string;
@@ -92,6 +107,11 @@ export default function SubmissionsTable({
   baseQuery: string;
   canWrite: boolean;
   canManage: boolean;
+  analysis?: TableAnalysis;
+  /** Cleaned-up names: group id → recorded spelling → name shown. */
+  aliases?: Record<string, Record<string, string>>;
+  savedViews?: SavedViewLite[];
+  group?: string;
 }) {
   const router = useRouter();
   const { focus, slot } = useFocusMode();
@@ -131,7 +151,44 @@ export default function SubmissionsTable({
   const selectable = canWrite || canManage;
   const stickyLeft = (selectable ? CHECK_W : 0) + RECEIVED_W;
   const widthOf = (c: string) => widths[c] ?? DEFAULT_WIDTH;
-  const tableWidth = stickyLeft + columns.reduce((sum, c) => sum + widthOf(c), 0);
+  const tableWidth = stickyLeft + (analysis ? SCORE_W : 0) + columns.reduce((sum, c) => sum + widthOf(c), 0);
+
+  // ---- reading the answers: checks per row, and cleaned-up names for group columns
+  const checksById = useMemo(() => {
+    const m = new Map<string, Map<string, Check>>();
+    if (analysis) for (const r of rows) m.set(r.id, readChecksFromMap(r.data, analysis));
+    return m;
+  }, [rows, analysis]);
+  const groupOfColumn = useMemo(() => new Map((analysis?.groups ?? []).flatMap((g) => g.columns.map((c) => [c, g.id] as const))), [analysis]);
+  const shown = (col: string, v: string) => {
+    const g = groupOfColumn.get(col);
+    return g ? (aliases[g]?.[v.trim()] ?? v) : v;
+  };
+  const filteredCols = new Set(filters.f.map((raw) => decodeColumnFilter(raw)?.col).filter(Boolean) as string[]);
+
+  // ---- column menu and quick peek
+  const [menu, setMenu] = useState<{ col: string; anchor: DOMRect } | null>(null);
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const peekIndex = peekId ? rows.findIndex((r) => r.id === peekId) : -1;
+  const peekRow = peekIndex >= 0 ? rows[peekIndex] : null;
+  const focusRow = (id: string) => document.querySelector<HTMLElement>(`tr[data-row="${id}"]`)?.focus({ preventScroll: false });
+  const onRowKey = (e: React.KeyboardEvent<HTMLTableRowElement>, r: TableRow, i: number) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === " " && analysis) {
+      e.preventDefault();
+      setPeekId(r.id);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      startNav();
+      router.push(`/p/${projectId}/${r.id}`);
+    } else if (e.key === "ArrowDown" && rows[i + 1]) {
+      e.preventDefault();
+      focusRow(rows[i + 1].id);
+    } else if (e.key === "ArrowUp" && rows[i - 1]) {
+      e.preventDefault();
+      focusRow(rows[i - 1].id);
+    }
+  };
 
   const pageIds = rows.map((r) => r.id);
   const allOnPage = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
@@ -341,19 +398,28 @@ export default function SubmissionsTable({
   );
   const th = "border-b border-r border-line border-r-line-soft bg-[#fafafa] px-3 py-2 text-left align-bottom text-xs font-medium leading-tight text-muted";
 
+  const tools = (
+    <>
+      {columnsButton}
+      <ViewsMenu projectId={projectId} views={savedViews} canManage={canManage} />
+      {analysis && <GroupByPicker groups={analysis.groups} current={group} />}
+    </>
+  );
+
   return (
     <>
       {focus ? (
-        // In focus mode the Columns button lives in the command bar at the top.
-        slot && createPortal(columnsButton, slot)
+        // In focus mode the table's tools live in the command bar at the top.
+        slot && createPortal(<span className="flex items-center gap-1.5">{tools}</span>, slot)
       ) : (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-2">
-            {columnsButton}
+          <span className="flex flex-wrap items-center gap-2">
+            {tools}
             <FocusButton />
           </span>
-          <p className="hidden text-xs text-faint sm:block">
-            {canWrite ? "Select text to highlight or add a note · right-click a row · " : ""}drag a column edge to resize · click a heading to sort
+          <p className="hidden text-xs text-faint lg:block">
+            {analysis ? "Space on a row: quick look · ▾ on a heading: counts & filter · " : ""}
+            {canWrite ? "select text to highlight · " : ""}drag a column edge to resize
           </p>
         </div>
       )}
@@ -391,6 +457,7 @@ export default function SubmissionsTable({
             <colgroup>
               {selectable && <col style={{ width: CHECK_W }} />}
               <col style={{ width: RECEIVED_W }} />
+              {analysis && <col style={{ width: SCORE_W }} />}
               {columns.map((c) => (
                 <col key={c} style={{ width: widthOf(c) }} />
               ))}
@@ -416,12 +483,30 @@ export default function SubmissionsTable({
                     Received {sortIcon(RECEIVED)}
                   </Link>
                 </th>
-                {columns.map((c) => (
-                  <th key={c} className={cn(th, "sticky top-0 z-10", sort?.col === c && "bg-paper-2 text-ink")} aria-sort={sort?.col === c ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
-                    <Link href={sortHref(c)} title={`Sort by ${c}`} className="flex items-end justify-between gap-1 pr-2 hover:text-ink">
-                      <span className="line-clamp-2 break-words">{c}</span>
-                      {sortIcon(c)}
+                {analysis && (
+                  <th className={cn(th, "sticky top-0 z-10", sort?.col === SCORE && "bg-paper-2 text-ink")} aria-sort={sort?.col === SCORE ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
+                    <Link href={sortHref(SCORE)} title="Sort by score (lowest first, then highest)" className="flex items-center gap-1 hover:text-ink">
+                      Score {sortIcon(SCORE)}
                     </Link>
+                  </th>
+                )}
+                {columns.map((c) => (
+                  <th key={c} className={cn(th, "group/th sticky top-0 z-10", sort?.col === c && "bg-paper-2 text-ink", filteredCols.has(c) && "bg-[#fafbe3] text-ink")} aria-sort={sort?.col === c ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
+                    <span className="flex items-end gap-1 pr-2">
+                      <Link href={sortHref(c)} title={`Sort by ${c}`} className="flex min-w-0 flex-1 items-end justify-between gap-1 hover:text-ink">
+                        <span className="line-clamp-2 break-words">{c}</span>
+                        {sortIcon(c)}
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => setMenu({ col: c, anchor: (e.currentTarget.closest("th") as HTMLElement).getBoundingClientRect() })}
+                        title="Counts, filter, sort, hide"
+                        aria-label={`Options for ${c}`}
+                        className={cn("grid h-5 w-5 shrink-0 place-items-center rounded text-muted transition hover:bg-black/[0.06] hover:text-ink", filteredCols.has(c) ? "opacity-100" : "opacity-60 group-hover/th:opacity-100")}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
                     <span
                       role="separator"
                       aria-orientation="vertical"
@@ -446,10 +531,12 @@ export default function SubmissionsTable({
                   <tr
                     key={r.id}
                     data-row={r.id}
+                    tabIndex={0}
+                    onKeyDown={(e) => onRowKey(e, r, rows.indexOf(r))}
                     onClick={(e) => openRow(e, r.id)}
                     onContextMenu={(e) => onRowContext(e, r)}
                     style={!on && mark ? { backgroundColor: mark.bg } : undefined}
-                    className={cn("group cursor-pointer transition-colors", on ? "bg-[#f8f9de]" : !mark && "bg-paper hover:bg-[#fafafb]", active && "outline outline-2 -outline-offset-2 outline-ink/25")}
+                    className={cn("group cursor-pointer outline-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink/40", on ? "bg-[#f8f9de]" : !mark && "bg-paper hover:bg-[#fafafb]", (active || peekId === r.id) && "outline outline-2 -outline-offset-2 outline-ink/25")}
                   >
                     {selectable && (
                       <td className={cn(cell, "z-[5] bg-inherit px-4 md:sticky md:left-0")}>
@@ -481,6 +568,20 @@ export default function SubmissionsTable({
                             </span>
                           )}
                         </Link>
+                        {analysis && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPeekId(r.id);
+                            }}
+                            title="Quick look (Space)"
+                            aria-label={`Quick look at ${titleOf(r)}`}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition hover:bg-black/[0.06] hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        )}
                         {canWrite && (
                           <button
                             type="button"
@@ -494,19 +595,58 @@ export default function SubmissionsTable({
                         )}
                       </div>
                     </td>
+                    {analysis && (
+                      <td className={cell} data-no-open>
+                        {r.score ? (
+                          <span className="flex items-center gap-2" title={`${r.score.ok} of ${r.score.total} checks passed`}>
+                            <span className="h-1.5 w-10 overflow-hidden rounded-full bg-paper-2 ring-1 ring-line-soft" aria-hidden>
+                              <span className={cn("block h-full rounded-full", pct(r.score.ok, r.score.total) >= 90 ? "bg-ok" : pct(r.score.ok, r.score.total) >= 75 ? "bg-[#d97706]" : "bg-flag")} style={{ width: `${pct(r.score.ok, r.score.total)}%` }} />
+                            </span>
+                            <span className="text-xs font-semibold tabular-nums text-ink">{pct(r.score.ok, r.score.total)}%</span>
+                            <span className="text-[0.6875rem] tabular-nums text-faint">
+                              {r.score.ok}/{r.score.total}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                    )}
                     {columns.map((c, i) => {
-                      const v = r.data[c] ?? "";
-                      const flagged = r.flaggedCols.includes(c);
+                      const raw = r.data[c] ?? "";
+                      const check = checksById.get(r.id)?.get(c);
+                      const v = shown(c, raw);
+                      const flagged = check ? !check.ok : r.flaggedCols.includes(c);
                       const cm = markById(cellMark(r, c));
                       return (
                         <td
                           key={c}
                           data-col={c}
-                          title={v}
+                          title={check ? `${check.answer}${check.remark ? ` · Remarks: ${check.remark}` : ""}` : v !== raw ? `${v} (recorded as “${raw}”)` : v}
                           style={cm ? { backgroundColor: cm.bg, boxShadow: `inset 4px 0 0 ${cm.dot}` } : undefined}
-                          className={cn(cell, "overflow-hidden text-ellipsis whitespace-nowrap text-ink-soft", i === 0 && "font-medium text-ink", flagged && !cm && "bg-flag-wash font-semibold text-flag", flagged && cm && "font-semibold text-flag")}
+                          className={cn(cell, "overflow-hidden text-ellipsis whitespace-nowrap text-ink-soft", i === 0 && "font-medium text-ink", flagged && !cm && "bg-flag-wash", flagged && !check && "font-semibold text-flag")}
                         >
-                          {v || <span className="text-muted">—</span>}
+                          {check ? (
+                            <span className="inline-flex max-w-full items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-semibold leading-none ring-1",
+                                  check.ok ? "bg-[#effaf3] text-ok ring-[#cdebd8]" : "bg-flag text-white ring-flag",
+                                )}
+                              >
+                                {check.ok ? <CheckIcon className="h-3 w-3" strokeWidth={3} /> : <X className="h-3 w-3" strokeWidth={3} />}
+                                {check.answer}
+                              </span>
+                              {check.remark && (
+                                <span className={cn("flex min-w-0 items-center gap-1 truncate text-xs", check.ok ? "text-muted" : "font-normal text-ink-soft")}>
+                                  <MessageSquare className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{check.remark}</span>
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            v || <span className="text-muted">—</span>
+                          )}
                         </td>
                       );
                     })}
@@ -602,6 +742,41 @@ export default function SubmissionsTable({
             {toast}
           </div>
         </div>
+      )}
+
+      {menu && (
+        <ColumnMenu
+          key={menu.col}
+          projectId={projectId}
+          col={menu.col}
+          filters={filters}
+          anchor={menu.anchor}
+          onHide={() => changeColumns(columns.filter((x) => x !== menu.col))}
+          onClose={() => setMenu(null)}
+        />
+      )}
+
+      {peekRow && analysis && (
+        <RecordPeek
+          projectId={projectId}
+          row={peekRow}
+          title={titleOf(peekRow)}
+          checks={[...(checksById.get(peekRow.id)?.values() ?? [])]}
+          facts={[
+            ...analysis.groups.map((g) => {
+              const col = g.columns.find((c) => c in peekRow.data) ?? g.columns[0];
+              return { label: g.label, value: shown(col, firstOf(Object.keys(peekRow.data), Object.values(peekRow.data), g.columns)) };
+            }),
+          ]}
+          position={{ index: peekIndex, total: rows.length }}
+          onPrev={rows[peekIndex - 1] ? () => setPeekId(rows[peekIndex - 1].id) : null}
+          onNext={rows[peekIndex + 1] ? () => setPeekId(rows[peekIndex + 1].id) : null}
+          onClose={() => {
+            const id = peekRow.id;
+            setPeekId(null);
+            requestAnimationFrame(() => focusRow(id));
+          }}
+        />
       )}
 
       {pickerOpen && (

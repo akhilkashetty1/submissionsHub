@@ -1,8 +1,10 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { query } from "@/lib/db";
-import type { Project } from "@/lib/projects";
+import { getProject, type Project } from "@/lib/projects";
 import { isMark, type MarkId } from "@/lib/marks";
+import { BLANK, FAIL, PASS, decodeColumnFilter, type Filters as FullFilters } from "@/lib/filters";
+import { analyseRecord, ANALYSIS_VERSION } from "@/lib/analysis-server";
 
 /**
  * A submission is stored the way the projects already describe their Google
@@ -25,6 +27,12 @@ export type Submission = {
   note_count: number;
   /** Colours on individual values: heading → colour id. */
   cell_marks: Record<string, string>;
+  /** Checks passed / checks answered (assessment portals only; null elsewhere or before analysis). */
+  score_ok: number | null;
+  score_total: number | null;
+  /** Headings of the checks that failed. */
+  fails: string[] | null;
+  person_key: string | null;
 };
 
 export type Incoming = { headers: string[]; values: string[]; submittedAt: Date | null; flagged: string[] };
@@ -84,25 +92,36 @@ export async function insertSubmission(project: Project, s: Incoming, origin: st
   const titleIndex = s.headers.indexOf(project.titleColumn);
   const title = titleIndex >= 0 ? s.values[titleIndex].slice(0, 200) : "";
   const search = s.values.join(" • ").toLowerCase().slice(0, 50_000);
+  const a = analyseRecord(project, s.headers, s.values);
 
   const rows = await query<{ id: string }>(
-    `insert into submissions (project, submitted_at, title, headers, "values", flagged, search, fingerprint, origin)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `insert into submissions (project, submitted_at, title, headers, "values", flagged, search, fingerprint, origin,
+                              score_ok, score_total, fails, person_key, vehicle_key, analysed_v)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      on conflict (project, fingerprint) do nothing
      returning id`,
-    [project.id, s.submittedAt, title, JSON.stringify(s.headers), JSON.stringify(s.values), JSON.stringify(s.flagged), search, fingerprint, origin],
+    [
+      project.id, s.submittedAt, title, JSON.stringify(s.headers), JSON.stringify(s.values), JSON.stringify(s.flagged), search, fingerprint, origin,
+      a.score_ok, a.score_total, a.fails ? JSON.stringify(a.fails) : null, a.person_key, a.vehicle_key, ANALYSIS_VERSION,
+    ],
   );
   return rows[0]?.id ?? null;
 }
 
 /* ------------------------------------------------------------- reading */
 
-/** `mark`: any | none | a colour. `notes`: "1" to show only records that have notes. */
-export type Filters = { q?: string; from?: string; to?: string; mark?: string; notes?: string };
+/** See lib/filters.ts. Every field is optional here, so older callers can pass just a search. */
+export type Filters = Partial<FullFilters>;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function where(project: string, f: Filters) {
+/** SQL selecting a column's value in a record, for column filters (records keep headers and values side by side). */
+const pairExists = (colParam: string, cond: string) =>
+  `exists (select 1 from jsonb_array_elements_text(submissions.headers) with ordinality hh(k, i)
+           join jsonb_array_elements_text(submissions."values") with ordinality vv(x, j) on vv.j = hh.i
+           where hh.k = ${colParam} and ${cond})`;
+
+export function where(project: string, f: Filters) {
   const clauses = ["project = $1"];
   const params: unknown[] = [project];
   if (f.q?.trim()) {
@@ -130,6 +149,33 @@ function where(project: string, f: Filters) {
     params.push(f.to);
     clauses.push(`received_at < (($${params.length}::date + 1)::timestamp at time zone 'Asia/Kolkata')`);
   }
+  // Column filters (from the column menus, group summaries and insights).
+  const groups = getProject(project)?.analysis?.groups ?? [];
+  for (const raw of f.f ?? []) {
+    const cf = decodeColumnFilter(raw);
+    if (!cf) continue;
+    params.push(cf.col);
+    const c = `$${params.length}`;
+    if (cf.value === FAIL) clauses.push(`coalesce(fails, '[]'::jsonb) ? ${c}`);
+    else if (cf.value === PASS) clauses.push(`(${pairExists(c, "vv.x ~ '^(Yes|No)'")} and not coalesce(fails, '[]'::jsonb) ? ${c})`);
+    else if (cf.value === BLANK) clauses.push(`not ${pairExists(c, "btrim(vv.x) <> ''")}`);
+    else if (cf.value === "Yes" || cf.value === "No") {
+      params.push(cf.value);
+      const v = `$${params.length}`;
+      clauses.push(pairExists(c, `(btrim(vv.x) = ${v} or vv.x like ${v} || ', Remarks:%')`));
+    } else {
+      params.push(cf.value);
+      const v = `$${params.length}`;
+      // A cleaned-up name also matches its other spellings (Clean-up → merge names).
+      const group = groups.find((g) => g.columns.includes(cf.col));
+      if (group) {
+        params.push(group.id);
+        clauses.push(
+          pairExists(c, `(btrim(vv.x) = ${v} or btrim(vv.x) in (select raw from value_aliases va where va.project = $1 and va.field = $${params.length} and va.canonical = ${v}))`),
+        );
+      } else clauses.push(pairExists(c, `btrim(vv.x) = ${v}`));
+    }
+  }
   return { sql: clauses.join(" and "), params };
 }
 
@@ -138,11 +184,14 @@ const cols = (alias = "submissions") =>
   `${alias}.id::text as id, ${alias}.project, ${alias}.received_at, ${alias}.submitted_at, ${alias}.title, ${alias}.headers, ${alias}."values", ${alias}.flagged,
    ${alias}.mark, ${alias}.mark_by, ${alias}.mark_at,
    (select count(*)::int from submission_notes sn where sn.submission_id = ${alias}.id) as note_count,
-   (select coalesce(json_object_agg(cm.col, cm.mark), '{}'::json) from cell_marks cm where cm.submission_id = ${alias}.id) as cell_marks`;
+   (select coalesce(json_object_agg(cm.col, cm.mark), '{}'::json) from cell_marks cm where cm.submission_id = ${alias}.id) as cell_marks,
+   ${alias}.score_ok, ${alias}.score_total, ${alias}.fails, ${alias}.person_key`;
 
 /** Sort by the time received (RECEIVED) or by any column of the form, by its heading. */
 export type Sort = { col: string; dir: "asc" | "desc" };
 export const RECEIVED = "received";
+/** Sort by the share of checks passed. */
+export const SCORE = "__score";
 
 export async function listSubmissions(project: string, f: Filters, page: number, pageSize: number, sort?: Sort) {
   const w = where(project, f);
@@ -153,6 +202,9 @@ export async function listSubmissions(project: string, f: Filters, page: number,
   if (sort?.col === RECEIVED) {
     const d = sort.dir === "asc" ? "asc" : "desc";
     orderBy = `received_at ${d}, id ${d}`;
+  } else if (sort?.col === SCORE) {
+    const d = sort.dir === "desc" ? "desc" : "asc";
+    orderBy = `(score_ok::numeric / nullif(score_total, 0)) ${d} nulls last, score_total desc, received_at desc, id desc`;
   } else if (sort?.col) {
     // Records store their answers as parallel header/value lists, so find this column's value by position.
     // Numbers sort as numbers (2 before 10), dates written like "05 Mar 2027" (optionally followed by a time)

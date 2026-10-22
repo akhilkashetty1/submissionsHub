@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Loader2, Maximize, Minimize2, Search, Slider
 import ExportButton from "@/components/ExportButton";
 import PortalIcon from "@/components/PortalIcon";
 import { markById } from "@/lib/marks";
+import { decodeColumnFilter, describeColumnFilter } from "@/lib/filters";
 import { startNav } from "@/lib/nav-state";
 import { FOCUS_COOKIE } from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
@@ -41,7 +42,7 @@ export default function TableWorkspace({
   initialFocus: boolean;
   project: { id: string; name: string; accent: string };
   total: number;
-  filters: { q: string; from: string; to: string; mark: string; notes: string };
+  filters: { q: string; from: string; to: string; mark: string; notes: string; f?: string[] };
   pager: { from: number; to: number; newerHref: string | null; olderHref: string | null };
   exportHref: string;
   /** The regular filter bar: shown above the table normally, and in a drop-down in focus mode. */
@@ -94,7 +95,7 @@ export default function TableWorkspace({
     setFiltersOpen(false);
   }
 
-  const activeCount = [filters.from, filters.to, filters.mark, filters.notes].filter(Boolean).length;
+  const activeCount = [filters.from, filters.to, filters.mark, filters.notes].filter(Boolean).length + (filters.f?.length ?? 0);
 
   return (
     <FocusContext.Provider value={{ focus, setFocus, slot }}>
@@ -249,12 +250,18 @@ function QuickSearch({ q }: { q: string }) {
 }
 
 /** Every active filter as a chip; × removes just that one. */
-function FilterChips({ filters }: { filters: { q: string; from: string; to: string; mark: string; notes: string } }) {
+function FilterChips({ filters }: { filters: { q: string; from: string; to: string; mark: string; notes: string; f?: string[] } }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const without = (...keys: string[]) => {
     const next = new URLSearchParams(params.toString());
-    keys.forEach((k) => next.delete(k));
+    for (const k of keys) {
+      if (k.startsWith("f:")) {
+        const keep = next.getAll("f").filter((x) => x !== k.slice(2));
+        next.delete("f");
+        keep.forEach((x) => next.append("f", x));
+      } else next.delete(k);
+    }
     next.delete("page");
     return `${pathname}${next.size ? `?${next}` : ""}`;
   };
@@ -265,6 +272,10 @@ function FilterChips({ filters }: { filters: { q: string; from: string; to: stri
     filters.to && { key: "to", label: `To ${fmtDate(filters.to)}` },
     mark && { key: "mark", label: mark, dot: markById(filters.mark)?.dot },
     filters.notes && { key: "notes", label: "With notes" },
+    ...(filters.f ?? []).map((raw) => {
+      const cf = decodeColumnFilter(raw);
+      return cf ? { key: `f:${raw}`, label: describeColumnFilter(cf, 22) } : null;
+    }),
   ].filter(Boolean) as { key: string; label: string; dot?: string }[];
   if (!chips.length) return null;
 
@@ -280,7 +291,7 @@ function FilterChips({ filters }: { filters: { q: string; from: string; to: stri
         </span>
       ))}
       {chips.length > 1 && (
-        <Link href={without("q", "from", "to", "mark", "notes")} className="shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted transition hover:bg-paper-2 hover:text-ink">
+        <Link href={without("q", "from", "to", "mark", "notes", "f")} className="shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted transition hover:bg-paper-2 hover:text-ink">
           Clear all
         </Link>
       )}

@@ -18,6 +18,8 @@ function crumbsFor(path: string, portals: Record<string, { name: string; accent:
   if (parts[0] === "p" && parts[1]) {
     const p = portals[parts[1]];
     const portal: Crumb = { label: p?.name ?? parts[1], href: `/p/${parts[1]}`, portal: p ? { id: parts[1], accent: p.accent } : undefined };
+    const views: Record<string, string> = { insights: "Insights", followups: "Follow-ups", expiries: "Expiries", cleanup: "Clean-up" };
+    if (parts[2] && views[parts[2]]) return [portal, { label: views[parts[2]] }];
     return parts[2] ? [portal, { label: `#${parts[2]}` }] : [{ ...portal, href: undefined }];
   }
   if (parts[0] === "site") return [{ label: "Website" }, { label: SITE_NAMES[parts[1]] ?? parts[1] }];
