@@ -1,7 +1,7 @@
 import Logo from "@/components/Logo";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { History, LayoutGrid, ShieldCheck, UserCog, Users } from "lucide-react";
+import { History, LayoutGrid, Power, ShieldCheck, UserCog, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { LEVEL_LABEL, levelFor, visibleProjects, visibleSites } from "@/lib/permissions";
 import { siteAccessId } from "@/lib/sites";
@@ -33,6 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     count: user.mustChangePassword ? null : (stats[p.id]?.total ?? 0),
   }));
   const adminNav = [
+    { href: "/forms", label: "Forms", icon: <Power className="h-4 w-4 shrink-0" /> },
     { href: "/users", label: "People & access", icon: <Users className="h-4 w-4 shrink-0" /> },
     { href: "/activity", label: "Activity log", icon: <History className="h-4 w-4 shrink-0" /> },
   ];

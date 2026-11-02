@@ -24,6 +24,12 @@ function describe(a: ActivityRow): { text: string; delete?: boolean } {
       return { text: `reset the password for @${d.user}` };
     case "user.delete":
       return { text: `deleted @${d.user}` };
+    case "form.close":
+      return { text: `closed the ${portal} form` };
+    case "form.open":
+      return { text: `opened the ${portal} form` };
+    case "form.message":
+      return { text: `changed the closed-form message for ${portal}: "${d.title}"` };
     default:
       return { text: a.action };
   }

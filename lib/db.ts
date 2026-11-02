@@ -124,6 +124,17 @@ const SCHEMA = `
   );
   create index if not exists activity_log_at on activity_log (at desc);
 
+  -- Whether each ride-along form is taking submissions, and what people see while it is closed.
+  -- No row = open, with the standard message.
+  create table if not exists form_status (
+    project     text        primary key,
+    open        boolean     not null default true,
+    title       text        not null default '',
+    message     text        not null default '',
+    updated_by  text,
+    updated_at  timestamptz not null default now()
+  );
+
   -- Website photos (sidebar → Website). Files live in Vercel Blob; only their details are here.
   create table if not exists site_media (
     id          bigserial primary key,

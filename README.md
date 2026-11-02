@@ -505,6 +505,21 @@ Timeline in short: hub built → added to Vercel with Neon → 2W moved off Rend
 connected → multi-user access, highlights and notes → spreadsheet-style table with chosen columns → collapsible menu.
 Google Sheets and Brevo email remain as parallel channels in each project.
 
+## 15b. Opening and closing the ride-along forms
+
+Sidebar → **Forms** (admins only). Each ride-along form (2W, 4W; not RoadShield) has a switch. While a form is closed,
+riders see a "Submissions have ended" screen instead of the form and the form's submit endpoint refuses (HTTP 403 `closed`).
+Nothing reopens by itself: an admin opens it again. Closing/opening and message changes go in the Activity log; everyone with
+access to a portal sees a "Form closed" pill on its header.
+
+- Table `form_status (project, open, title, message, updated_by, updated_at)`; no row = open with the standard words
+  (`lib/form-status-defaults.ts`). Blank title/message in the admin page mean "use the standard words".
+- `GET /api/form-status/<2w|4w>` is public and read-only (`{open, title, message}`, never cached); the forms read it from the
+  origin of their `HUB_INGEST_URL`. If the hub is unreachable the forms stay **open** (a hub outage never takes a form down).
+- Forms cache the answer for 10 s for page loads and ask fresh on every submit and on "Check again". A rider part-way
+  through keeps their answers (draft in the page; 4W's offline outbox keeps retrying) and can submit once it reopens.
+- Code: `lib/form-status.ts`, `app/form-actions.ts` (admin-gated), `components/FormsManager.tsx`, page under `(admin-only)/forms`.
+
 ## 16. Website photos (RoadShield)
 
 Admins change the photos on the RoadShield website from here: the Gallery page (four sections, each with a
