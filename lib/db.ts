@@ -232,6 +232,7 @@ async function migrate() {
         and to_regclass('public.followups') is not null
         and to_regclass('public.value_aliases') is not null
         and to_regclass('public.saved_filters') is not null
+        and to_regclass('public.form_status') is not null
         and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'submissions' and column_name = 'analysed_v') as ok`,
   );
   if (rows[0]?.ok) return;
